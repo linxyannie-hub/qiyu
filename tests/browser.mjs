@@ -42,10 +42,10 @@ try {
       JSON.parse(localStorage.getItem("qiyu.care.workspace")),
     );
   const click = async (action, id = "") => {
-    await page
-      .locator(`[data-action="${action}"]${id ? `[data-id="${id}"]` : ""}`)
-      .first()
-      .click();
+    const selector = `[data-action="${action}"]${id ? `[data-id="${id}"]` : ""}`;
+    const inside = page.locator(`#dialog[open] ${selector}`);
+    if (await inside.count()) await inside.first().click();
+    else await page.locator(selector).first().click();
   };
   const submit = async () => {
     await page.locator("#dialog [type=submit]").click();
@@ -319,6 +319,60 @@ try {
     await page.locator(".family-content").evaluate((el) => el.scrollTop),
     before,
   );
+  // Current facts retain independent reports and use the latest correction for each report.
+  await fresh("family/me/pet-1");
+  await click("switch-member", "周先生");
+  await goto("family/today/pet-1");
+  await click("task", "task-pet-1-0");
+  await click("correct", "event-first");
+  await page.locator("#dialog [name=result]").selectOption("missed");
+  await page.locator("#dialog [name=note]").fill("重新核对后确认本次未执行");
+  await submit();
+  assert.ok(
+    (await page.locator(".task-card").first().innerText()).includes(
+      "本次未执行",
+    ),
+  );
+  await goto("family/me/pet-1");
+  await click("switch-member", "周女士");
+  await goto("family/today/pet-1");
+  await click("task", "task-pet-1-0");
+  await click("add-task-record", "task-pet-1-0");
+  await page.locator("#dialog [name=result][value=done]").check();
+  await page.locator("#dialog [name=difficulty]").selectOption("动物抗拒");
+  await submit();
+  const cardText = await page.locator(".task-card").first().innerText();
+  assert.ok(cardText.includes("2份独立报告"));
+  assert.ok(cardText.includes("本次未执行"));
+  assert.ok(cardText.includes("已按安排执行"));
+  assert.equal(
+    await page
+      .locator(".task-card")
+      .first()
+      .evaluate((el) => el.classList.contains("done")),
+    false,
+  );
+  await goto("doctor/clinical");
+  await click("concern-detail", "concern-1");
+  assert.equal(await page.locator("#dialog .effective-report-row").count(), 2);
+  await close();
+  // The difficulty type accompanies the issue and its responsible handoff.
+  await fresh("family/messages/pet-1");
+  await click("new-concern");
+  await page.locator("#dialog [name=title]").fill("实际操作遇到困难");
+  await page
+    .locator("#dialog [name=body]")
+    .fill("护理时动物抗拒，想确认下一步。");
+  await page.locator("#dialog [name=difficulty]").selectOption("动物抗拒");
+  await submit();
+  let difficultyConcern = (await saved()).concerns[0];
+  assert.equal(difficultyConcern.difficulty, "动物抗拒");
+  await goto("clinic/queue");
+  await click("concern-detail", difficultyConcern.id);
+  assert.ok(
+    (await page.locator("#dialog").innerText()).includes("家庭报告的困难"),
+  );
+  await close();
   // Header actions respond on every workspace, including when already on the support page.
   for (const route of ["clinic/dashboard", "doctor/dashboard", "ops/support"]) {
     await fresh(route);

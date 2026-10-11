@@ -170,9 +170,9 @@ export function seed() {
     revision: 0,
     clinic: {
       name: "禾伴动物医院",
-      city: "杭州 · 滨江",
+      city: "上海",
       hours: "09:00—18:00",
-      phone: "0571-8600-0120",
+      phone: "021-0000-0120",
       contact: "林晓",
       backup: "王雨",
       target: 120,
@@ -187,6 +187,7 @@ export function seed() {
         petId: "pet-1",
         planId: "plan-1",
         result: "uncertain",
+        difficulty: "动物抗拒",
         note: "护理时团团有些抗拒，不确定这次是否完成。",
         actor: "周先生",
         occurredAt: now,
@@ -200,6 +201,7 @@ export function seed() {
         taskId: "task-pet-1-0",
         planId: "plan-1",
         title: "护理尝试后不确定是否完成",
+        difficulty: "动物抗拒",
         category: "执行困难",
         body: "护理时团团有些抗拒，不确定这次是否完成，想请医院协助确认下一步。",
         status: "clinical",
@@ -276,7 +278,7 @@ export function seed() {
       {
         id: "clinic-1",
         name: "禾伴动物医院",
-        city: "杭州",
+        city: "上海",
         contact: "林晓",
         status: "active",
       },
@@ -321,6 +323,31 @@ export const currentPlan = (s, id, at = iso()) =>
 export const latestPlan = (s, id) =>
   s.plans.filter((p) => p.petId === id && p.status !== "withdrawn").at(-1);
 export const petById = (s, id) => s.pets.find((p) => p.id === id);
+function eventRoot(event, eventsById) {
+  const visited = new Set();
+  let root = event;
+  while (root.corrects && !visited.has(root.id)) {
+    visited.add(root.id);
+    const previous = eventsById.get(root.corrects);
+    if (
+      !previous ||
+      previous.taskId !== event.taskId ||
+      previous.actor !== event.actor
+    )
+      break;
+    root = previous;
+  }
+  return root.id;
+}
+export function effectiveTaskEvents(s, taskId) {
+  const events = s.events.filter((e) => e.taskId === taskId);
+  const byId = new Map(events.map((e) => [e.id, e]));
+  const latestByRoot = new Map();
+  for (const event of events)
+    latestByRoot.set(eventRoot(event, byId), event.id);
+  const effectiveIds = new Set(latestByRoot.values());
+  return events.filter((e) => effectiveIds.has(e.id));
+}
 export const resultLabels = {
   done: "已按安排执行",
   attempted: "尝试未完成",
@@ -344,6 +371,28 @@ export const appointmentLabels = {
 };
 export function normalizeState(s) {
   s.refunds ||= [];
+  if (s.clinic.city === "杭州 · 滨江") s.clinic.city = "上海";
+  if (s.clinic.phone === "0571-8600-0120") s.clinic.phone = "021-0000-0120";
+  const originalInstitution = s.institutions.find(
+    (c) =>
+      c.id === "clinic-1" && c.name === "禾伴动物医院" && c.city === "杭州",
+  );
+  if (originalInstitution) originalInstitution.city = "上海";
+  for (const a of s.appointments) {
+    if (a.status !== "requested" || !a.replacesId) continue;
+    const previous = s.appointments.find((x) => x.id === a.replacesId);
+    if (
+      !previous ||
+      previous.petId !== a.petId ||
+      ["completed", "cancelled"].includes(previous.status)
+    ) {
+      a.status = "cancelled";
+      a.cancelReason =
+        previous?.status === "completed"
+          ? "原复查已完成，改约申请已撤销"
+          : "原预约已结束，改约申请已撤销";
+    }
+  }
   for (const c of s.concerns) {
     c.assigneeRole ||=
       c.assignee === roles.doctor.person
@@ -437,6 +486,7 @@ function createConcern(
   actor,
   taskId = null,
   category = "执行困难",
+  difficulty = null,
 ) {
   const c = {
     id: uid("concern"),
@@ -446,6 +496,7 @@ function createConcern(
     title,
     body,
     category,
+    difficulty,
     status: "new",
     assignee: null,
     createdAt: iso(),
@@ -454,6 +505,51 @@ function createConcern(
   };
   s.concerns.unshift(c);
   return c;
+}
+function checkExecutionReports(s, task, actor) {
+  const completedActors = new Set(
+    effectiveTaskEvents(s, task.id)
+      .filter((e) => e.result === "done")
+      .map((e) => e.actor),
+  );
+  const title = "收到两份执行报告，请协助核实";
+  if (
+    completedActors.size < 2 ||
+    s.concerns.some(
+      (c) =>
+        c.taskId === task.id &&
+        c.category === "记录核实" &&
+        c.title === title &&
+        c.status !== "resolved",
+    )
+  )
+    return;
+  const c = createConcern(
+    s,
+    task.petId,
+    title,
+    "家庭成员分别报告了本次执行，请院方协助核对事实。",
+    actor,
+    task.id,
+    "记录核实",
+  );
+  c.planId = task.planId;
+}
+function activateIfUsed(s, pet) {
+  if (
+    !pet?.accepted ||
+    pet.status !== "active" ||
+    !currentPlan(s, pet.id) ||
+    s.activations.some((a) => a.petId === pet.id)
+  )
+    return;
+  s.activations.push({
+    id: uid("act"),
+    petId: pet.id,
+    at: iso(),
+    status: "valid",
+    amount: s.settings.unitPrice,
+  });
 }
 export function transition(
   original,
@@ -529,19 +625,10 @@ export function transition(
         occurredAt: at,
         createdAt: iso(),
         attachment: action.attachment || null,
+        difficulty: action.difficulty || null,
       };
-      const prior = s.events.filter((e) => e.taskId === task.id && !e.corrects);
       s.events.push(event);
-      if (prior.some((e) => e.actor !== actor) && action.result === "done")
-        createConcern(
-          s,
-          p.id,
-          "收到两份执行报告，请协助核实",
-          "家庭成员分别报告了本次执行，请院方协助核对事实。",
-          actor,
-          task.id,
-          "记录核实",
-        );
+      checkExecutionReports(s, task, actor);
       if (task.cancelled || currentPlan(s, p.id, at)?.id !== task.planId)
         createConcern(
           s,
@@ -560,15 +647,10 @@ export function transition(
           required(action.note, "请说明需要医院协助的情况。"),
           actor,
           task.id,
+          "执行困难",
+          action.difficulty || null,
         );
-      if (!s.activations.some((a) => a.petId === p.id))
-        s.activations.push({
-          id: uid("act"),
-          petId: p.id,
-          at: iso(),
-          status: "valid",
-          amount: s.settings.unitPrice,
-        });
+      activateIfUsed(s, p);
       message = action.help ? "已记录，并提交医院协助" : "实际执行情况已记录";
       entity = event.id;
       break;
@@ -579,16 +661,33 @@ export function transition(
         const e = s.events.find((e) => e.id === action.id);
         if (!e || e.actor !== actor)
           throw new Error("只能更正自己提交的记录。");
+        const pet = petById(s, e.petId);
+        if (
+          !pet?.members.some(
+            (m) =>
+              m.active &&
+              (!m.expires || m.expires >= day()) &&
+              m.name === actor,
+          )
+        )
+          throw new Error("当前照护者的授权已失效。");
         if (!resultLabels[action.result]) throw new Error("请选择更正结果");
+        const byId = new Map(s.events.map((event) => [event.id, event]));
+        const rootId = eventRoot(e, byId);
+        const previous = effectiveTaskEvents(s, e.taskId).find(
+          (event) => eventRoot(event, byId) === rootId,
+        );
         s.events.push({
-          ...e,
+          ...previous,
           id: uid("event"),
           operationId: uid("operation"),
           result: action.result,
           note: required(action.note, "请填写更正原因"),
-          corrects: e.id,
+          corrects: previous.id,
           createdAt: iso(),
         });
+        const task = s.tasks.find((t) => t.id === e.taskId);
+        if (task) checkExecutionReports(s, task, actor);
         message = "已追加更正，原记录保留";
       }
       break;
@@ -611,7 +710,9 @@ export function transition(
         actor,
         action.taskId,
         action.category,
+        action.difficulty || null,
       ).id;
+      activateIfUsed(s, p);
       message = "已提交，等待医院接收";
       break;
     case "claim":
@@ -1077,6 +1178,15 @@ export function transition(
           throw new Error("需先确认复查");
         if (a.status === "completed" || a.status === "cancelled")
           throw new Error("当前预约已结束");
+        if (action.status === "confirmed" && a.replacesId) {
+          const old = s.appointments.find((x) => x.id === a.replacesId);
+          if (
+            !old ||
+            old.petId !== a.petId ||
+            !["confirmed", "requested"].includes(old.status)
+          )
+            throw new Error("原复查已结束，请重新申请复查。");
+        }
         a.status = action.status;
         if (a.status === "confirmed") {
           if (a.replacesId) {
@@ -1089,6 +1199,17 @@ export function transition(
           petById(s, a.petId).review = a.date;
         }
         if (a.status === "completed") a.completedAt = iso();
+        if (["completed", "cancelled"].includes(a.status)) {
+          for (const pending of s.appointments.filter(
+            (x) => x.replacesId === a.id && x.status === "requested",
+          )) {
+            pending.status = "cancelled";
+            pending.cancelReason =
+              a.status === "completed"
+                ? "原复查已完成，改约申请已撤销"
+                : "原预约已取消，改约申请已撤销";
+          }
+        }
         message = "复查状态已更新";
       }
       break;

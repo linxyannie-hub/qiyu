@@ -5,6 +5,7 @@ import {
   latestPlan,
   petById,
   resultLabels,
+  effectiveTaskEvents,
   concernLabels,
   appointmentLabels,
   day,
@@ -452,7 +453,7 @@ function eventTimeline(petId) {
         .slice(0, 12)
         .map((e) => {
           const t = s.tasks.find((t) => t.id === e.taskId);
-          return `<div class="timeline-item"><span class="timeline-icon">${icon(e.result === "done" ? "check" : "chat")}</span><div><h3>${esc(t?.title || "执行记录")} · ${esc(resultLabels[e.result])}${e.corrects ? " · 更正记录" : ""}</h3><p>${esc(e.note || "已记录实际执行情况")}</p><time>${esc(e.actor)} · ${fmt(e.occurredAt, true)}</time>${e.attachment ? `<img class="message-image" src="${safeImage(e.attachment)}" alt="照护记录附件">` : ""}${route().role === "family" && e.actor === actor() ? `<button class="text-btn" data-action="correct" data-id="${e.id}">更正记录</button>` : ""}</div></div>`;
+          return `<div class="timeline-item"><span class="timeline-icon">${icon(e.result === "done" ? "check" : "chat")}</span><div><h3>${esc(t?.title || "执行记录")} · ${esc(resultLabels[e.result])}${e.corrects ? " · 更正记录" : ""}</h3><p>${esc(e.note || "已记录实际执行情况")}</p>${e.difficulty ? `<p>报告的困难：${esc(e.difficulty)}</p>` : ""}<time>${esc(e.actor)} · ${fmt(e.occurredAt, true)}</time>${e.attachment ? `<img class="message-image" src="${safeImage(e.attachment)}" alt="照护记录附件">` : ""}${route().role === "family" && e.actor === actor() ? `<button class="text-btn" data-action="correct" data-id="${e.id}">更正记录</button>` : ""}</div></div>`;
         })
         .join("")}</div>`
     : empty("还没有执行记录", "家庭开始记录后，照护过程会在这里连续呈现。");
@@ -556,7 +557,7 @@ function reportsPage() {
     )
     .join(
       "",
-    )}</div><div class="notice">${icon("chart")}有效启用以正式发布、家庭接收和实际使用为依据。</div></section><section class="card pad"><h2 class="section-gap">问题处理</h2>${Object.entries(
+    )}</div><div class="notice">${icon("chart")}有效启用以正式发布、家庭接收和首次记录或求助为依据。</div></section><section class="card pad"><h2 class="section-gap">问题处理</h2>${Object.entries(
     concernLabels,
   )
     .map(
@@ -644,6 +645,71 @@ function supportPage() {
       : empty("当前没有待处理支持事项", "机构使用中的问题与处理结果都会保留。")
   }</section>`;
 }
+function taskDisplaySummary(s, taskId) {
+  const reports = effectiveTaskEvents(s, taskId),
+    latest = reports.at(-1);
+  const singleDone = reports.length === 1 && latest.result === "done";
+  const label =
+    reports.length > 1
+      ? `${reports.length}份独立报告：${reports.map((e) => e.actor + " · " + resultLabels[e.result]).join("；")}`
+      : latest
+        ? latest.actor + " · " + resultLabels[latest.result]
+        : "本次尚无记录";
+  return {
+    reports,
+    latest,
+    singleDone,
+    label,
+    iconName:
+      reports.length > 1
+        ? new Set(reports.map((e) => e.actor)).size > 1
+          ? "users"
+          : "clipboard"
+        : singleDone
+          ? "check"
+          : "clock",
+  };
+}
+function effectiveReportsPanel(s, taskId) {
+  const reports = effectiveTaskEvents(s, taskId);
+  if (!reports.length) return "";
+  return `<section class="effective-reports"><h3>${icon("clipboard")}当前有效记录${reports.length > 1 ? ` · ${reports.length}份独立报告` : ""}</h3>${reports.map((e) => `<div class="effective-report-row"><span class="avatar">${esc(e.actor.slice(-2))}</span><div><b>${esc(e.actor)} · ${esc(resultLabels[e.result])}</b><small>${fmt(e.occurredAt, true)}${e.corrects ? " · 已更正" : ""}</small>${e.difficulty ? `<p>报告的困难：${esc(e.difficulty)}</p>` : ""}</div></div>`).join("")}<p class="report-source-note">汇总采用每份报告的最新更正，历史记录继续保留。</p></section>`;
+}
+function difficultySelect() {
+  return select("遇到的具体困难（可选）", "difficulty", [
+    ["", "暂不选择"],
+    ["动物抗拒", "动物抗拒"],
+    ["不会操作", "不会操作"],
+    ["药物吐出或未确认服用", "药物吐出或未确认服用"],
+    ["无法安排照护时间", "无法安排照护时间"],
+    ["不确定是否成功", "不确定是否成功"],
+    ["家人记录不一致", "家人记录不一致"],
+    ["其他困难", "其他困难"],
+  ]);
+}
+function familyFollowupStrip(p, concerns) {
+  if (!concerns.length) return "";
+  const priority = {
+    supplement: 0,
+    answered: 1,
+    action: 2,
+    new: 3,
+    clinical: 4,
+    accepted: 5,
+  };
+  const current = concerns
+    .slice()
+    .sort((a, b) => (priority[a.status] ?? 9) - (priority[b.status] ?? 9))[0];
+  const label = {
+    supplement: "医院需要你补充情况",
+    answered: "医院已有答复，请查看下一步",
+    action: "下一步已确认，等待实际落实",
+    new: "求助已提交，等待医院接收",
+    clinical: "院方已接手，等待专业答复",
+    accepted: "已有负责人接手，正在跟进",
+  }[current.status];
+  return `<a class="family-followup-strip" href="${href("family", "messages", p.id)}"><span class="followup-icon">${icon("chat")}</span><div><small>本轮求助 · ${concerns.length}项未结</small><strong>${label}</strong><p>${esc(current.assignee || "本院随访团队")} · ${esc(current.title)}</p></div>${icon("chevron")}</a>`;
+}
 function familyToday() {
   const s = state(),
     p = selectedPet(),
@@ -659,12 +725,13 @@ function familyToday() {
     cs = s.concerns.filter((c) => c.petId === p.id && c.status !== "resolved");
   const latest = latestPlan(s, p.id);
   if (!p.accepted)
-    return `${head("接住一份安心的照护", "医院已经为你准备好回家后的安排。")}<section class="card pad"><div class="field-action"><h2>${esc(p.name)}的出院照护</h2>${badge(plan ? "等待接收" : "等待医院确认", "amber")}</div><div class="notice">${icon("building")}<div>${esc(s.clinic.name)}<br>随访负责人：${esc(s.clinic.contact)} · ${esc(s.clinic.hours)}</div></div>${plan ? instructionList(plan) : empty("医院正在准备安排", "正式发布后，你就可以在这里接收本轮服务。")}<div class="consent-box" style="margin:18px 0">本轮照护以医院交付的正式安排为依据。你可以记录实际执行情况、邀请家人协助，并在遇到困难时联系原医院。</div>${plan ? btn("核对无误，接收照护安排", "accept-service", p.id, "primary full", "check") : ""}</section>`;
-  return `<div class="family-grid"><div><section class="family-greeting"><div class="eyebrow">${dateLabel()}</div><h1>陪${esc(p.name)}，<br>慢慢回到日常。</h1><p>今天由${esc(p.member)}照护。<br>${p.status === "ended" ? "本轮已结束，照护资料已为你保留。" : "把每一次实际情况记下来，医院会和你一起跟进。"}</p>${petArt(p.species, p.color)}</section>${latest?.previousId ? `<section class="card change-card section-gap"><h3>${icon("clipboard")} 医院已更新照护安排</h3><p>${esc(latest.reason)} · ${fmt(latest.effectiveAt, true)}生效</p><a class="text-btn" href="${href("family", "plan", p.id)}">查看具体变化 ${icon("arrow")}</a></section>` : ""}${p.handoff?.status === "pending" ? `<div class="notice amber">${icon("users")}<div>正在等待${esc(p.handoff.to)}确认接班。<br>${actor() === p.handoff.to ? btn("确认接班", "accept-handoff", p.id, "small soft", "check") : "交接完成前，请继续核对照护情况。"}</div></div>` : ""}<section class="card"><div class="card-head"><div><h2>今天的照护</h2><p>当前安排 · 每一次记录都如实保留</p></div><span class="subtle">${tasks.length} 项</span></div>${
+    return `${head("接住一份安心的照护", "医院已经为你准备好回家后的安排。")}<section class="card pad"><div class="field-action"><h2>${esc(p.name)}的出院照护</h2>${badge(plan ? "等待接收" : "等待医院确认", "amber")}</div><div class="notice">${icon("building")}<div>${esc(s.clinic.name)}<br>随访负责人：${esc(s.clinic.contact)} · ${esc(s.clinic.hours)}</div></div>${plan ? instructionList(plan) : empty("医院正在准备安排", "正式发布后，你就可以在这里接收本轮服务。")}<div class="consent-box" style="margin:18px 0">本轮照护以医院交付的正式安排为依据。你可以记录实际执行情况、邀请家人协助，并在遇到困难时联系原医院。</div>${plan ? btn("核对无误，接收照护安排", "accept-service", p.id, "primary full", "check") : ""}<a class="btn full" style="margin-top:10px" href="tel:${s.clinic.phone.replace(/[^\d+]/g, "")}">${icon("phone")}需要确认，先联系院方</a></section>`;
+  return `<div class="family-grid"><div><section class="family-greeting"><div class="eyebrow">${dateLabel()}</div><h1>陪${esc(p.name)}，<br>慢慢回到日常。</h1><p>今天由${esc(p.member)}照护。<br>${p.status === "ended" ? "本轮已结束，照护资料已为你保留。" : "把每一次实际情况记下来，医院会和你一起跟进。"}</p>${petArt(p.species, p.color)}</section>${familyFollowupStrip(p, cs)}${latest?.previousId ? `<section class="card change-card section-gap"><h3>${icon("clipboard")} 医院已更新照护安排</h3><p>${esc(latest.reason)} · ${fmt(latest.effectiveAt, true)}生效</p><a class="text-btn" href="${href("family", "plan", p.id)}">查看具体变化 ${icon("arrow")}</a></section>` : ""}${p.handoff?.status === "pending" ? `<div class="notice amber">${icon("users")}<div>正在等待${esc(p.handoff.to)}确认接班。<br>${actor() === p.handoff.to ? btn("确认接班", "accept-handoff", p.id, "small soft", "check") : "交接完成前，请继续核对照护情况。"}</div></div>` : ""}<section class="card"><div class="card-head"><div><h2>今天的照护</h2><p>当前安排 · 每一次记录都如实保留</p></div><span class="subtle">${tasks.length} 项</span></div>${
     tasks
       .map((t) => {
-        const e = events.filter((e) => e.taskId === t.id).at(-1);
-        return `<div class="task-card ${e?.result === "done" ? "done" : ""}"><span class="task-clock">${t.time}</span><div class="task-info"><div class="task-title-row"><h3>${esc(t.title)}</h3><span class="task-type">${icon({ 护理: "heart", 观察: "eye", 用药: "clipboard", 活动: "paw", 饮食: "leaf" }[t.type] || "clipboard")}${esc(t.type)}</span></div><div class="task-status">${icon(e?.result === "done" ? "check" : "clock")}${e ? `${esc(e.actor)} · ${esc(resultLabels[e.result])}` : "本次尚无记录"}</div></div>${btn(e ? "查看记录" : "去记录", "task", t.id, e ? "small" : "small soft", e ? "chevron" : "edit")}</div>`;
+        const summary = taskDisplaySummary(s, t.id),
+          e = summary.latest;
+        return `<div class="task-card ${summary.singleDone ? "done" : ""}"><span class="task-clock">${t.time}</span><div class="task-info"><div class="task-title-row"><h3>${esc(t.title)}</h3><span class="task-type">${icon({ 护理: "heart", 观察: "eye", 用药: "clipboard", 活动: "paw", 饮食: "leaf" }[t.type] || "clipboard")}${esc(t.type)}</span></div><div class="task-status">${icon(summary.iconName)}${esc(summary.label)}</div></div>${btn(e ? "查看记录" : "去记录", "task", t.id, e ? "small" : "small soft", e ? "chevron" : "edit")}</div>`;
       })
       .join("") ||
     empty("当前没有待执行事项", "本轮结束后可在资料中查看照护过程。")
@@ -1016,7 +1083,7 @@ function openTask(id, addRecord = false) {
     modal(
       t.title,
       `${p.name} · ${t.date} ${t.time}`,
-      `${historical ? `<div class="notice amber">${icon("clipboard")}本次记录关联此前安排；新的执行请查看当前正式安排。</div>` : ""}<div class="notice">${icon("clipboard")}${esc(t.detail)}</div><div class="timeline">${ev.map((e) => `<div class="timeline-item"><span class="timeline-icon">${icon(e.result === "done" ? "check" : "chat")}</span><div><h3>${esc(resultLabels[e.result])}${e.corrects ? " · 更正记录" : ""}</h3><p>${esc(e.note || "已如实记录")}</p><time>${esc(e.actor)} · ${fmt(e.occurredAt, true)}</time>${e.attachment ? `<img class="message-image" src="${safeImage(e.attachment)}" alt="照护照片">` : ""}${e.actor === actor() ? btn("更正这条记录", "correct", e.id, "small", "edit") : ""}</div></div>`).join("")}</div>${p.status !== "ended" ? `<div class="actions" style="margin-top:20px">${btn("针对这次照护求助", "task-concern", t.id, "primary", "chat")}${btn("追加实际执行记录", "add-task-record", t.id, "", "plus")}</div>` : ""}`,
+      `${historical ? `<div class="notice amber">${icon("clipboard")}本次记录关联此前安排；新的执行请查看当前正式安排。</div>` : ""}<div class="notice">${icon("clipboard")}${esc(t.detail)}</div>${effectiveReportsPanel(s, id)}<div class="timeline">${ev.map((e) => `<div class="timeline-item"><span class="timeline-icon">${icon(e.result === "done" ? "check" : "chat")}</span><div><h3>${esc(resultLabels[e.result])}${e.corrects ? " · 更正记录" : ""}</h3><p>${esc(e.note || "已如实记录")}</p>${e.difficulty ? `<p>报告的困难：${esc(e.difficulty)}</p>` : ""}<time>${esc(e.actor)} · ${fmt(e.occurredAt, true)}</time>${e.attachment ? `<img class="message-image" src="${safeImage(e.attachment)}" alt="照护照片">` : ""}${e.actor === actor() ? btn("更正这条记录", "correct", e.id, "small", "edit") : ""}</div></div>`).join("")}</div>${p.status !== "ended" ? `<div class="actions" style="margin-top:20px">${btn("针对这次照护求助", "task-concern", t.id, "primary", "chat")}${btn("追加实际执行记录", "add-task-record", t.id, "", "plus")}</div>` : ""}`,
     );
     return;
   }
@@ -1036,7 +1103,7 @@ function openTask(id, addRecord = false) {
             )
             .join(
               "",
-            )}</div>${textarea("补充说明", "note", "", "", "记录实际情况，不确定的地方也可以说明")}<label class="field">补充照片（可选）<input type="file" name="attachment" accept="image/png,image/jpeg,image/webp,image/gif"><small>选择清晰的照护照片，单张不超过 500KB。</small></label>${field("实际发生时间（医院当地时间）", "occurredAt", new Intl.DateTimeFormat("sv-SE", { timeZone: "Asia/Shanghai", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false }).format(new Date()).replace(" ", "T"), "datetime-local", true)}<label class="checkbox"><input type="checkbox" name="help">这次需要医院协助，请一并提交求助</label>`
+            )}</div>${difficultySelect()}${textarea("补充说明", "note", "", "", "记录实际情况，不确定的地方也可以说明")}<label class="field">补充照片（可选）<input type="file" name="attachment" accept="image/png,image/jpeg,image/webp,image/gif"><small>选择清晰的照护照片，单张不超过 500KB。</small></label>${field("实际发生时间（医院当地时间）", "occurredAt", new Intl.DateTimeFormat("sv-SE", { timeZone: "Asia/Shanghai", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false }).format(new Date()).replace(" ", "T"), "datetime-local", true)}<label class="checkbox"><input type="checkbox" name="help">这次需要医院协助，请一并提交求助</label>`
     }`,
     p.status === "ended"
       ? null
@@ -1052,6 +1119,7 @@ function openTask(id, addRecord = false) {
                 petId: p.id,
                 taskId: id,
                 result: data.result,
+                difficulty: data.difficulty || null,
                 note: data.note,
                 help: !!data.help,
                 attachment,
@@ -1083,7 +1151,7 @@ function openConcern(petId, taskId = null) {
         ["观察变化", "希望报告变化"],
         ["预约与资料", "预约或资料"],
       ],
-    )}${field("问题标题", "title", "", "text", true, "概括你需要协助的情况")}${textarea("实际情况", "body", "", true, "发生了什么、已经尝试了什么、希望医院协助什么")}`,
+    )}${difficultySelect()}${field("问题标题", "title", "", "text", true, "概括你需要协助的情况")}${textarea("实际情况", "body", "", true, "发生了什么、已经尝试了什么、希望医院协助什么")}`,
     {
       label: "提交医院协助",
       handler: (data) => run({ type: "concern", petId: p.id, taskId, ...data }),
@@ -1103,7 +1171,7 @@ function concernDetail(id) {
   modal(
     c.title,
     `${p.name} · ${esc(c.category)} · ${fmt(c.createdAt, true)}`,
-    `<div class="field-action">${cBadge(c)}<span class="subtle">${esc(c.assignee ? "责任人：" + c.assignee : "等待医院接手")}</span></div>${task ? `<div class="notice">${icon("clipboard")}<div>关联事项：${esc(task.title)} · ${task.time}<br>${esc(task.detail)}</div></div>` : ""}<div class="message-list">${c.messages.map((m) => `<div class="message ${m.role !== "family" ? "professional" : ""}"><span class="avatar ${m.role !== "family" ? "staff" : ""}">${esc(m.actor.slice(-2))}</span><div class="message-body"><div class="message-meta"><b>${esc(m.actor)}</b><time>${fmt(m.at, true)}</time>${m.role === "doctor" ? "<span>兽医答复</span>" : ""}</div><div class="message-text">${esc(m.text)}</div></div></div>`).join("")}</div>${c.nextAction ? `<div class="notice">${icon("arrow")}<div><b>下一步</b><br>${esc(c.nextAction)}</div></div>` : ""}<div class="actions" style="margin-top:20px">${r.role !== "family" && c.status === "new" ? btn("接手此问题", "claim", id, "primary", "check") : ""}${r.role === "clinic" && ["accepted", "supplement"].includes(c.status) && c.category !== "预约与资料" ? btn("转交主治医生", "escalate", id, "primary", "stethoscope") : ""}${r.role !== "family" && !["new", "resolved"].includes(c.status) ? btn("请求家庭补充", "request-supplement", id, "", "chat") : ""}${r.role === "family" && c.status === "answered" ? btn("已收到，开始落实", "ack-action", id, "primary", "check") : ""}${r.role !== "family" && c.status !== "resolved" ? btn("交接负责人", "reassign", id, "", "users") : ""}${["answered", "action"].includes(c.status) ? btn("确认已解决", "resolve", id, "soft", "check") : ""}${c.status === "resolved" ? btn("需要继续跟进", "reopen", id, "", "chat") : ""}</div>${c.status !== "resolved" && canReply && (r.role === "family" || c.status !== "new") ? `<div class="divider"></div><form class="form" data-form="concern-reply" data-id="${id}">${textarea(r.role === "family" ? "补充信息" : "交付答复", "text", "", true, r.role === "family" ? "补充实际情况" : "说明判断与处理结果")}${r.role !== "family" ? textarea("明确的下一步", "nextAction", "", true, "说明后续行动、由谁执行及联系安排") : ""}<div class="form-error" role="alert"></div><div class="actions"><button class="btn primary" type="submit">${icon("chat")}${r.role === "family" ? "发送补充" : "交付答复与后续安排"}</button></div></form>` : ""}`,
+    `<div class="field-action">${cBadge(c)}<span class="subtle">${esc(c.assignee ? "责任人：" + c.assignee : "等待医院接手")}</span></div>${task ? `<div class="notice">${icon("clipboard")}<div>关联事项：${esc(task.title)} · ${task.time}<br>${esc(task.detail)}</div></div>` : ""}${task ? effectiveReportsPanel(s, task.id) : ""}${c.difficulty ? `<div class="notice"><span>${icon("chat")}</span><div><b>家庭报告的困难</b><br>${esc(c.difficulty)}</div></div>` : ""}<div class="message-list">${c.messages.map((m) => `<div class="message ${m.role !== "family" ? "professional" : ""}"><span class="avatar ${m.role !== "family" ? "staff" : ""}">${esc(m.actor.slice(-2))}</span><div class="message-body"><div class="message-meta"><b>${esc(m.actor)}</b><time>${fmt(m.at, true)}</time>${m.role === "doctor" ? "<span>兽医答复</span>" : ""}</div><div class="message-text">${esc(m.text)}</div></div></div>`).join("")}</div>${c.nextAction ? `<div class="notice">${icon("arrow")}<div><b>下一步</b><br>${esc(c.nextAction)}</div></div>` : ""}<div class="actions" style="margin-top:20px">${r.role !== "family" && c.status === "new" ? btn("接手此问题", "claim", id, "primary", "check") : ""}${r.role === "clinic" && ["accepted", "supplement"].includes(c.status) && c.category !== "预约与资料" ? btn("转交主治医生", "escalate", id, "primary", "stethoscope") : ""}${r.role !== "family" && !["new", "resolved"].includes(c.status) ? btn("请求家庭补充", "request-supplement", id, "", "chat") : ""}${r.role === "family" && c.status === "answered" ? btn("已收到，开始落实", "ack-action", id, "primary", "check") : ""}${r.role !== "family" && c.status !== "resolved" ? btn("交接负责人", "reassign", id, "", "users") : ""}${["answered", "action"].includes(c.status) ? btn("确认已解决", "resolve", id, "soft", "check") : ""}${c.status === "resolved" ? btn("需要继续跟进", "reopen", id, "", "chat") : ""}</div>${c.status !== "resolved" && canReply && (r.role === "family" || c.status !== "new") ? `<div class="divider"></div><form class="form" data-form="concern-reply" data-id="${id}">${textarea(r.role === "family" ? "补充信息" : "交付答复", "text", "", true, r.role === "family" ? "补充实际情况" : "说明判断与处理结果")}${r.role !== "family" ? textarea("明确的下一步", "nextAction", "", true, "说明后续行动、由谁执行及联系安排") : ""}<div class="form-error" role="alert"></div><div class="actions"><button class="btn primary" type="submit">${icon("chat")}${r.role === "family" ? "发送补充" : "交付答复与后续安排"}</button></div></form>` : ""}`,
     null,
     true,
   );
@@ -1227,7 +1295,7 @@ function exportPet(petId) {
     ),
     events = s.events.filter((e) => e.petId === petId),
     cs = s.concerns.filter((c) => c.petId === petId);
-  const html = `<!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>${esc(p.name)}的照护资料 · 栖愈</title><style>body{font-family:system-ui,sans-serif;color:#233c35;max-width:800px;margin:40px auto;padding:24px;line-height:1.8}h1{font-size:26px}h2{font-size:20px;margin-top:30px}section{border-bottom:1px solid #dfe5da;padding:16px 0}p{white-space:pre-wrap}small{color:#68776f}img{max-width:260px}dt{color:#68776f}dd{margin-left:0}</style><h1>${esc(p.name)}的本轮照护资料</h1><p>${esc(s.clinic.name)} · ${esc(p.scene)}<br>主人：${esc(p.owner)}<br>资料截至：${fmt(new Date().toISOString(), true)}</p><h2>正式照护安排</h2>${plans.map((pl) => `<section><h3>${esc(pl.reason)}</h3><p>确认人：${esc(pl.author)}<br>来源：${esc(pl.source)}<br>生效：${fmt(pl.effectiveAt, true)}</p>${pl.items.map((i) => `<p><b>${esc(i.time)} ${esc(i.title)}</b><br>${esc(i.detail)}</p>`).join("")}<p>${esc(pl.note)}</p>${pl.sourceDocument && /^data:(application\/pdf|image\/(png|jpeg|webp));base64,/.test(pl.sourceDocument.data) ? `<p><a href="${esc(pl.sourceDocument.data)}" download="${esc(pl.sourceDocument.name)}">下载原始材料：${esc(pl.sourceDocument.name)}</a></p>` : ""}</section>`).join("")}<h2>家庭自报执行记录</h2>${events.map((e) => `<section><b>${esc(s.tasks.find((t) => t.id === e.taskId)?.title || "照护事项")} · ${esc(resultLabels[e.result])}</b><p>${esc(e.note)}</p><small>记录人：${esc(e.actor)} · 实际发生：${fmt(e.occurredAt, true)}${e.corrects ? " · 更正记录" : ""}</small>${e.attachment ? `<p><img src="${safeImage(e.attachment)}" alt="照护记录附件"></p>` : ""}</section>`).join("") || "<p>暂无记录</p>"}<h2>问题与医院答复</h2>${cs.map((c) => `<section><h3>${esc(c.title)} · ${esc(concernLabels[c.status])}</h3>${c.messages.map((m) => `<p><b>${esc(m.actor)}</b> · ${fmt(m.at, true)}<br>${esc(m.text)}</p>`).join("")}<p>下一步：${esc(c.nextAction || "待明确")}</p></section>`).join("") || "<p>暂无问题</p>"}<h2>复查与服务交付</h2>${s.appointments
+  const html = `<!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>${esc(p.name)}的照护资料 · 栖愈</title><style>body{font-family:system-ui,sans-serif;color:#233c35;max-width:800px;margin:40px auto;padding:24px;line-height:1.8}h1{font-size:26px}h2{font-size:20px;margin-top:30px}section{border-bottom:1px solid #dfe5da;padding:16px 0}p{white-space:pre-wrap}small{color:#68776f}img{max-width:260px}dt{color:#68776f}dd{margin-left:0}</style><h1>${esc(p.name)}的本轮照护资料</h1><p>${esc(s.clinic.name)} · ${esc(p.scene)}<br>主人：${esc(p.owner)}<br>资料截至：${fmt(new Date().toISOString(), true)}</p><h2>正式照护安排</h2>${plans.map((pl) => `<section><h3>${esc(pl.reason)}</h3><p>确认人：${esc(pl.author)}<br>来源：${esc(pl.source)}<br>生效：${fmt(pl.effectiveAt, true)}</p>${pl.items.map((i) => `<p><b>${esc(i.time)} ${esc(i.title)}</b><br>${esc(i.detail)}</p>`).join("")}<p>${esc(pl.note)}</p>${pl.sourceDocument && /^data:(application\/pdf|image\/(png|jpeg|webp));base64,/.test(pl.sourceDocument.data) ? `<p><a href="${esc(pl.sourceDocument.data)}" download="${esc(pl.sourceDocument.name)}">下载原始材料：${esc(pl.sourceDocument.name)}</a></p>` : ""}</section>`).join("")}<h2>家庭自报执行记录</h2>${events.map((e) => `<section><b>${esc(s.tasks.find((t) => t.id === e.taskId)?.title || "照护事项")} · ${esc(resultLabels[e.result])}</b><p>${esc(e.note)}</p>${e.difficulty ? `<p>报告的困难：${esc(e.difficulty)}</p>` : ""}<small>记录人：${esc(e.actor)} · 实际发生：${fmt(e.occurredAt, true)}${e.corrects ? " · 更正记录" : ""}</small>${e.attachment ? `<p><img src="${safeImage(e.attachment)}" alt="照护记录附件"></p>` : ""}</section>`).join("") || "<p>暂无记录</p>"}<h2>问题与医院答复</h2>${cs.map((c) => `<section><h3>${esc(c.title)} · ${esc(concernLabels[c.status])}</h3>${c.difficulty ? `<p>家庭报告的困难：${esc(c.difficulty)}</p>` : ""}${c.messages.map((m) => `<p><b>${esc(m.actor)}</b> · ${fmt(m.at, true)}<br>${esc(m.text)}</p>`).join("")}<p>下一步：${esc(c.nextAction || "待明确")}</p></section>`).join("") || "<p>暂无问题</p>"}<h2>复查与服务交付</h2>${s.appointments
     .filter((a) => a.petId === petId)
     .map(
       (a) =>

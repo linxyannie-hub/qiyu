@@ -1,6 +1,14 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { seed, transition, currentPlan, day, uid } from "../assets/domain.mjs";
+import {
+  seed,
+  transition,
+  currentPlan,
+  effectiveTaskEvents,
+  normalizeState,
+  day,
+  uid,
+} from "../assets/domain.mjs";
 const apply = (s, a, r = "clinic", actor) => transition(s, a, r, actor).state;
 const items = () => [
   {
@@ -93,6 +101,75 @@ test("缺少困难说明的提交失败且原状态不发生部分写入", () =>
   );
   assert.equal(JSON.stringify(s), before);
 });
+test("执行困难保留在事实与院方待办中，更正结果不会丢失困难上下文", () => {
+  let s = apply(
+    seed(),
+    {
+      type: "report",
+      petId: "pet-1",
+      taskId: "task-pet-1-1",
+      result: "attempted",
+      help: true,
+      difficulty: "动物抗拒",
+      note: "团团一直躲避，防护圈没能戴上",
+    },
+    "family",
+    "周女士",
+  );
+  const eventId = s.events.at(-1).id;
+  assert.equal(s.events.at(-1).difficulty, "动物抗拒");
+  assert.equal(s.concerns[0].difficulty, "动物抗拒");
+  s = apply(
+    s,
+    {
+      type: "correct",
+      id: eventId,
+      result: "uncertain",
+      note: "无法确认佩戴情况",
+    },
+    "family",
+    "周女士",
+  );
+  assert.equal(
+    effectiveTaskEvents(s, "task-pet-1-1")[0].difficulty,
+    "动物抗拒",
+  );
+  s = apply(
+    s,
+    {
+      type: "concern",
+      petId: "pet-1",
+      title: "请协助确认操作",
+      body: "没有理解出院单上的步骤",
+      difficulty: "不会操作",
+    },
+    "family",
+    "周女士",
+  );
+  assert.equal(s.concerns[0].difficulty, "不会操作");
+});
+test("初始机构面向上海，仅旧默认资料迁移，用户填写的信息保留", () => {
+  const fresh = seed();
+  assert.equal(fresh.clinic.city, "上海");
+  assert.equal(fresh.clinic.phone, "021-0000-0120");
+  assert.equal(fresh.institutions[0].city, "上海");
+  const legacy = seed();
+  legacy.clinic.city = "杭州 · 滨江";
+  legacy.clinic.phone = "0571-8600-0120";
+  legacy.institutions[0].city = "杭州";
+  normalizeState(legacy);
+  assert.equal(legacy.clinic.city, "上海");
+  assert.equal(legacy.clinic.phone, "021-0000-0120");
+  assert.equal(legacy.institutions[0].city, "上海");
+  const custom = seed();
+  custom.clinic.city = "上海 · 徐汇";
+  custom.clinic.phone = "021-6088-8899";
+  custom.institutions[0].name = "用户设置的医院";
+  custom.institutions[0].city = "杭州";
+  const before = structuredClone([custom.clinic, custom.institutions]);
+  normalizeState(custom);
+  assert.deepEqual([custom.clinic, custom.institutions], before);
+});
 test("护理接单转交，医生答复，家庭确认形成闭环", () => {
   let s = seed();
   s = apply(
@@ -155,6 +232,144 @@ test("更正追加新事件，保留原结果", () => {
   );
   assert.equal(s.events[0].result, "uncertain");
   assert.equal(s.events.at(-1).corrects, "event-first");
+});
+test("同一原报告的连续更正串联历史，保留其他家人的独立事实", () => {
+  let s = seed();
+  s = apply(
+    s,
+    {
+      type: "correct",
+      id: "event-first",
+      result: "attempted",
+      note: "确认护理尝试未完成",
+    },
+    "family",
+    "周先生",
+  );
+  const firstCorrection = s.events.at(-1).id;
+  s = apply(
+    s,
+    {
+      type: "report",
+      petId: "pet-1",
+      taskId: "task-pet-1-0",
+      result: "uncertain",
+      note: "主人另一次尝试也不确定是否完成",
+    },
+    "family",
+    "周女士",
+  );
+  s = apply(
+    s,
+    {
+      type: "correct",
+      id: "event-first",
+      result: "missed",
+      note: "核对后确认本次未执行",
+    },
+    "family",
+    "周先生",
+  );
+  assert.equal(s.events.at(-1).corrects, firstCorrection);
+  assert.equal(s.events[0].result, "uncertain");
+  assert.equal(
+    s.events.find((e) => e.id === firstCorrection).result,
+    "attempted",
+  );
+  assert.deepEqual(
+    effectiveTaskEvents(s, "task-pet-1-0").map((e) => [e.actor, e.result]),
+    [
+      ["周女士", "uncertain"],
+      ["周先生", "missed"],
+    ],
+  );
+});
+test("已更正为未执行的旧报告不会造成多人执行的假冲突", () => {
+  let s = seed();
+  s.events = [];
+  s.concerns = [];
+  s = apply(
+    s,
+    { type: "report", petId: "pet-1", taskId: "task-pet-1-1", result: "done" },
+    "family",
+    "周女士",
+  );
+  const id = s.events[0].id;
+  s = apply(
+    s,
+    { type: "correct", id, result: "missed", note: "记录错了，本次没有执行" },
+    "family",
+    "周女士",
+  );
+  s = apply(
+    s,
+    { type: "report", petId: "pet-1", taskId: "task-pet-1-1", result: "done" },
+    "family",
+    "周先生",
+  );
+  assert.equal(s.events.length, 3);
+  assert.deepEqual(
+    effectiveTaskEvents(s, "task-pet-1-1").map((e) => e.result),
+    ["missed", "done"],
+  );
+  assert.equal(s.concerns.length, 0);
+});
+test("更正后出现两位家人的已执行报告需要核实且不重复创建待办", () => {
+  let s = seed();
+  s.events = [];
+  s.concerns = [];
+  s = apply(
+    s,
+    {
+      type: "report",
+      petId: "pet-1",
+      taskId: "task-pet-1-1",
+      result: "attempted",
+    },
+    "family",
+    "周女士",
+  );
+  const id = s.events[0].id;
+  s = apply(
+    s,
+    { type: "report", petId: "pet-1", taskId: "task-pet-1-1", result: "done" },
+    "family",
+    "周先生",
+  );
+  assert.equal(s.concerns.length, 0);
+  s = apply(
+    s,
+    { type: "correct", id, result: "done", note: "核对后确认本次已完成" },
+    "family",
+    "周女士",
+  );
+  assert.equal(s.concerns.length, 1);
+  assert.equal(s.concerns[0].planId, "plan-1");
+  s = apply(
+    s,
+    { type: "report", petId: "pet-1", taskId: "task-pet-1-1", result: "done" },
+    "family",
+    "周先生",
+  );
+  assert.equal(s.concerns.length, 1);
+});
+test("已撤销的家人不能通过更正改写本轮有效事实", () => {
+  const s = apply(
+    seed(),
+    { type: "revoke", petId: "pet-1", id: "member" },
+    "family",
+    "周女士",
+  );
+  assert.throws(
+    () =>
+      apply(
+        s,
+        { type: "correct", id: "event-first", result: "done", note: "更正" },
+        "family",
+        "周先生",
+      ),
+    /授权/,
+  );
 });
 test("未经家庭接收不得报告执行", () =>
   assert.throws(
@@ -469,6 +684,82 @@ test("同一预约存在待确认改约时禁止重复申请", () => {
   s = apply(s, action, "family", "周女士");
   assert.throws(() => apply(s, action, "family", "周女士"), /已有/);
 });
+test("原复查完成后同步撤销待确认改约，不能再确认出第二次预约", () => {
+  let s = seed();
+  const plans = JSON.stringify(s.plans);
+  s = apply(
+    s,
+    { type: "reschedule", id: "appt-1", date: day(5), time: "15:00" },
+    "family",
+    "周女士",
+  );
+  const pendingId = s.appointments.at(-1).id;
+  s = apply(s, {
+    type: "appointmentStatus",
+    id: "appt-1",
+    status: "completed",
+  });
+  assert.equal(s.appointments.at(-1).status, "cancelled");
+  assert.match(s.appointments.at(-1).cancelReason, /原复查已完成/);
+  assert.throws(
+    () =>
+      apply(s, {
+        type: "appointmentStatus",
+        id: pendingId,
+        status: "confirmed",
+      }),
+    /预约已结束/,
+  );
+  assert.equal(JSON.stringify(s.plans), plans);
+});
+test("取消原预约同时撤销依赖它的改约申请", () => {
+  let s = seed();
+  s = apply(
+    s,
+    { type: "reschedule", id: "appt-1", date: day(5), time: "15:00" },
+    "family",
+    "周女士",
+  );
+  s = apply(
+    s,
+    { type: "appointmentStatus", id: "appt-1", status: "cancelled" },
+    "family",
+    "周女士",
+  );
+  assert.equal(s.appointments[0].status, "cancelled");
+  assert.equal(s.appointments.at(-1).status, "cancelled");
+  assert.match(s.appointments.at(-1).cancelReason, /原预约已取消/);
+});
+test("既有待确认改约引用已结束原复查时不能恢复有效预约", () => {
+  const s = seed();
+  s.appointments[0].status = "completed";
+  s.appointments.push({
+    id: "pending-reschedule",
+    petId: "pet-1",
+    date: day(5),
+    time: "15:00",
+    status: "requested",
+    replacesId: "appt-1",
+  });
+  const before = JSON.stringify(s);
+  assert.throws(
+    () =>
+      apply(s, {
+        type: "appointmentStatus",
+        id: "pending-reschedule",
+        status: "confirmed",
+      }),
+    /预约已结束/,
+  );
+  assert.equal(JSON.stringify(s), before);
+  const refreshed = apply(s, {
+    type: "ticket",
+    title: "随访支持",
+    body: "刷新记录",
+  });
+  assert.equal(refreshed.appointments.at(-1).status, "cancelled");
+  assert.match(refreshed.appointments.at(-1).cancelReason, /原复查已完成/);
+});
 test("模板退回补充后可修改重提并重新审核", () => {
   let s = seed();
   s = apply(
@@ -649,4 +940,19 @@ test("新的专业安排不凭空创建生效前的任务", () => {
       .length,
     0,
   );
+});
+test("已接收的正式服务首次主动求助也是有效使用，同轮不重复启用", () => {
+  let s = seed();
+  s.activations = [];
+  const action = {
+    type: "concern",
+    petId: "pet-1",
+    title: "操作遇到困难",
+    body: "希望院方协助确认",
+    difficulty: "动物抗拒",
+  };
+  s = apply(s, action, "family", "周女士");
+  assert.equal(s.activations.length, 1);
+  s = apply(s, action, "family", "周女士");
+  assert.equal(s.activations.length, 1);
 });
