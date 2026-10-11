@@ -1,0 +1,6 @@
+{
+  "name": "qiyu-care", "version": "1.0.0", "private": true, "type": "module",
+  "description": "栖愈 · 宠物诊后协同平台",
+  "scripts": {"start": "node scripts/serve.mjs", "build": "node scripts/build.mjs", "test": "node --test tests/*.test.mjs", "check": "node --check assets/app.mjs && node --check assets/domain.mjs && node --check assets/store.mjs"},
+  "engines": {"node": ">=20"}
+}
