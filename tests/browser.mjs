@@ -358,6 +358,14 @@ try {
   await page.locator("#dialog [name=reason]").fill("重新核对后续安排");
   await submit();
   assert.equal((await saved()).plans.at(-1).status, "withdrawn");
+  await goto("family/plan/pet-1");
+  await click("view-plan", upcoming.id);
+  assert.ok(
+    (await page.locator("#dialog").innerText()).includes(
+      "这份安排已撤销，不再生效",
+    ),
+  );
+  await close();
   // Phone-screen layout also fits a short landscape viewport.
   await page.setViewportSize({ width: 812, height: 390 });
   await goto("family/today/pet-1");

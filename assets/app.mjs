@@ -542,7 +542,7 @@ function familyPlan() {
       )
       .slice()
       .reverse();
-  return `${head("一份清楚的照护安排", "始终查看当前有效安排，所有变化都有来源。", btn("导出照护资料", "export-pet", p.id, "", "download"))}<div class="family-grid"><div class="stack"><section class="card pad"><div class="field-action"><h2>当前安排</h2>${plan ? badge("医生已确认") : badge("待发布", "amber")}</div>${futurePlanNotice(p.id)}${plan ? `<p class="subtle" style="margin:8px 0">${esc(plan.author)} · ${fmt(plan.effectiveAt, true)}生效</p>${instructionList(plan)}<div class="notice">${icon("file")}<div>来源：${esc(plan.source)}<br>${esc(plan.note)}</div></div>${btn("查看出院指导单", "source", plan.id, "full", "file")}` : empty("等待院方发布", "正式安排会在医院确认后出现。")}</section><section class="card pad"><h2 class="section-gap">实际执行记录</h2>${eventTimeline(p.id)}</section></div><aside class="stack"><section class="card pad"><h2 class="section-gap">安排变化</h2><div class="timeline">${plans.map((pl) => `<div class="timeline-item"><span class="timeline-icon">${icon("clipboard")}</span><div><h3>${esc(pl.reason)}</h3><p>${esc(pl.author)} · ${fmt(pl.effectiveAt, true)}生效</p>${badge(pl.status === "withdrawn" ? "已撤销" : plan?.id === pl.id ? "当前有效" : pl.effectiveAt > new Date().toISOString() ? "即将生效" : "此前安排", plan?.id === pl.id ? "green" : "")}<button class="text-btn" style="display:block" data-action="view-plan" data-id="${pl.id}">查看${pl.previousId ? "变化" : "详情"} ${icon("chevron")}</button></div></div>`).join("") || empty("暂无安排")}</div></section><section class="card pad"><h2>照护分工</h2><p class="subtle" style="margin:10px 0">当前照护人：${esc(p.member)}</p>${linkBtn("管理家人交接", href("family", "me", p.id), "full", "users")}</section></aside></div>`;
+  return `${head("一份清楚的照护安排", "始终查看当前有效安排，所有变化都有来源。", btn("导出照护资料", "export-pet", p.id, "", "download"))}<div class="family-grid"><div class="stack"><section class="card pad"><div class="field-action"><h2>当前安排</h2>${plan ? badge("医生已确认") : badge("待发布", "amber")}</div>${futurePlanNotice(p.id)}${plan ? `<p class="subtle" style="margin:8px 0">${esc(plan.author)} · ${fmt(plan.effectiveAt, true)}生效</p>${instructionList(plan)}<div class="notice">${icon("file")}<div>来源：${esc(plan.source)}<br>${esc(plan.note)}</div></div>${btn("查看出院指导单", "source", plan.id, "full", "file")}` : empty("等待院方发布", "正式安排会在医院确认后出现。")}</section><section class="card pad"><h2 class="section-gap">实际执行记录</h2>${eventTimeline(p.id)}</section></div><aside class="stack"><section class="card pad"><h2 class="section-gap">安排变化</h2><div class="timeline">${plans.map((pl) => `<div class="timeline-item"><span class="timeline-icon">${icon("clipboard")}</span><div><h3>${esc(pl.reason)}</h3><p>${esc(pl.author)} · ${pl.status === "withdrawn" ? fmt(pl.withdrawnAt, true) + "撤销" : fmt(pl.effectiveAt, true) + "生效"}</p>${badge(pl.status === "withdrawn" ? "已撤销" : plan?.id === pl.id ? "当前有效" : pl.effectiveAt > new Date().toISOString() ? "即将生效" : "此前安排", plan?.id === pl.id ? "green" : "")}<button class="text-btn" style="display:block" data-action="view-plan" data-id="${pl.id}">查看${pl.previousId ? "变化" : "详情"} ${icon("chevron")}</button></div></div>`).join("") || empty("暂无安排")}</div></section><section class="card pad"><h2>照护分工</h2><p class="subtle" style="margin:10px 0">当前照护人：${esc(p.member)}</p>${linkBtn("管理家人交接", href("family", "me", p.id), "full", "users")}</section></aside></div>`;
 }
 function familyMessages() {
   const p = selectedPet(),
@@ -870,11 +870,12 @@ function openTask(id, addRecord = false) {
   }
   const p = petById(s, t.petId),
     ev = s.events.filter((e) => e.taskId === id);
+  const historical = t.planId !== currentPlan(s, p.id)?.id;
   if (ev.length && !addRecord) {
     modal(
       t.title,
       `${p.name} · ${t.date} ${t.time}`,
-      `<div class="notice">${icon("clipboard")}${esc(t.detail)}</div><div class="timeline">${ev.map((e) => `<div class="timeline-item"><span class="timeline-icon">${icon(e.result === "done" ? "check" : "chat")}</span><div><h3>${esc(resultLabels[e.result])}${e.corrects ? " · 更正记录" : ""}</h3><p>${esc(e.note || "已如实记录")}</p><time>${esc(e.actor)} · ${fmt(e.occurredAt, true)}</time>${e.attachment ? `<img class="message-image" src="${safeImage(e.attachment)}" alt="照护照片">` : ""}${e.actor === actor() ? btn("更正这条记录", "correct", e.id, "small", "edit") : ""}</div></div>`).join("")}</div>${p.status !== "ended" ? `<div class="actions" style="margin-top:20px">${btn("针对这次照护求助", "task-concern", t.id, "primary", "chat")}${btn("追加实际执行记录", "add-task-record", t.id, "", "plus")}</div>` : ""}`,
+      `${historical ? `<div class="notice amber">${icon("clipboard")}本次记录关联此前安排；新的执行请查看当前正式安排。</div>` : ""}<div class="notice">${icon("clipboard")}${esc(t.detail)}</div><div class="timeline">${ev.map((e) => `<div class="timeline-item"><span class="timeline-icon">${icon(e.result === "done" ? "check" : "chat")}</span><div><h3>${esc(resultLabels[e.result])}${e.corrects ? " · 更正记录" : ""}</h3><p>${esc(e.note || "已如实记录")}</p><time>${esc(e.actor)} · ${fmt(e.occurredAt, true)}</time>${e.attachment ? `<img class="message-image" src="${safeImage(e.attachment)}" alt="照护照片">` : ""}${e.actor === actor() ? btn("更正这条记录", "correct", e.id, "small", "edit") : ""}</div></div>`).join("")}</div>${p.status !== "ended" ? `<div class="actions" style="margin-top:20px">${btn("针对这次照护求助", "task-concern", t.id, "primary", "chat")}${btn("追加实际执行记录", "add-task-record", t.id, "", "plus")}</div>` : ""}`,
     );
     return;
   }
@@ -882,7 +883,7 @@ function openTask(id, addRecord = false) {
   modal(
     t.title,
     `${p.name} · ${t.time} · 当前照护人 ${p.member}`,
-    `<div class="notice ${t.cancelled ? "amber" : ""}">${icon("clipboard")}<div>${esc(t.detail)}${t.cancelled ? "<br>这项记录关联此前安排，医院将协助核实。" : ""}</div></div>${ev.length ? `<div class="metric-detail"><b>最近一条记录</b><p>${esc(ev.at(-1).actor)} · ${esc(resultLabels[ev.at(-1).result])}</p><p>${esc(ev.at(-1).note)}</p></div>` : ""}${
+    `<div class="notice ${historical ? "amber" : ""}">${icon("clipboard")}<div>${esc(t.detail)}${historical ? "<br>这项记录关联此前安排，医院将协助核实。" : ""}</div></div>${ev.length ? `<div class="metric-detail"><b>最近一条记录</b><p>${esc(ev.at(-1).actor)} · ${esc(resultLabels[ev.at(-1).result])}</p><p>${esc(ev.at(-1).note)}</p></div>` : ""}${
       p.status === "ended"
         ? `<div class="notice">${icon("check")}本轮已结束，执行记录可在照护资料中查看。</div>`
         : `<h3>这一次的实际情况</h3><div class="result-options">${Object.entries(
@@ -993,8 +994,8 @@ function viewPlan(id) {
     : [];
   modal(
     pl.previousId ? "照护安排变化" : "照护安排详情",
-    `${fmt(pl.effectiveAt, true)}生效 · ${esc(pl.author)}`,
-    `${old ? `<div class="notice">${icon("edit")}<div><b>${esc(pl.reason)}</b><br>${changes.length ? changes.map((i) => esc(i.title) + "的安排已调整").join("<br>") : "医院已更新补充指导，请查看当前安排。"}</div></div>` : ""}${removed.length ? `<div class="notice amber">${icon("clipboard")}已取消：${removed.map((i) => esc(i.title)).join("、")}</div>` : ""}${instructionList(pl)}<p class="subtle">${esc(pl.note)}</p>`,
+    `${pl.status === "withdrawn" ? "已撤销，不会生效" : fmt(pl.effectiveAt, true) + "生效"} · ${esc(pl.author)}`,
+    `${pl.status === "withdrawn" ? `<div class="notice amber">${icon("close")}<div>这份安排已撤销，不再生效。<br>原因：${esc(pl.withdrawReason)}</div></div>` : ""}${old ? `<div class="notice">${icon("edit")}<div><b>${esc(pl.reason)}</b><br>${changes.length ? changes.map((i) => esc(i.title) + "的安排已调整").join("<br>") : "医院已更新补充指导，请查看当前安排。"}</div></div>` : ""}${removed.length ? `<div class="notice amber">${icon("clipboard")}已取消：${removed.map((i) => esc(i.title)).join("、")}</div>` : ""}${instructionList(pl)}<p class="subtle">${esc(pl.note)}</p>`,
     null,
     true,
   );
