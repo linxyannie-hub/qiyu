@@ -1,35 +1,48 @@
 const paths = {
- leaf:'M5 15C5 7 13 3 21 3c0 8-4 16-12 16-3 0-4-2-4-4Z M5 21 16 10',
- grid:'M3 3h7v7H3z M14 3h7v7h-7z M3 14h7v7H3z M14 14h7v7h-7z',
- heart:'M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1.1-1.1a5.5 5.5 0 0 0-7.8 7.8L12 21l8.8-8.6a5.5 5.5 0 0 0 0-7.8Z',
- clipboard:'M9 4H5v17h14V4h-4 M9 2h6v4H9z M8 11h8 M8 15h5',
- calendar:'M4 5h16v16H4z M8 3v4 M16 3v4 M4 10h16 M8 14h2 M14 14h2',
- chat:'M21 11a8 8 0 0 1-8 8H5l-3 3V11a9 9 0 0 1 19 0Z M7 10h10 M7 14h6',
- users:'M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2 M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z M17 4a4 4 0 0 1 0 8 M22 21v-2a4 4 0 0 0-3-4',
- settings:'M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8Z M9 3l-1 3-3 1-2 3 2 3v3l3 2 3-1 3 1 3-2v-3l2-3-2-3-3-1-1-3Z',
- chart:'M4 3v18h17 M8 16v-4 M13 16V8 M18 16V5',
- building:'M4 21V4h12v17 M16 10h5v11 M8 8h4 M8 12h4 M8 16h4 M2 21h21',
- wallet:'M3 7V4h16v3 M3 7h18v14H3z M15 12h6v5h-6z',
- search:'M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16Z m6-2 5 5',
- bell:'M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9 M10 21h4',
- chevron:'m9 5 7 7-7 7',down:'m6 9 6 6 6-6',plus:'M12 5v14 M5 12h14',
- arrow:'M5 12h14 m-6-6 6 6-6 6', back:'M19 12H5 m6-6-6 6 6 6',
- check:'m5 12 4 4L19 6',close:'m6 6 12 12 M6 18 18 6',
- clock:'M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20Z M12 6v6l4 2',
- shield:'m12 2 8 4v6c0 6-8 10-8 10S4 18 4 12V6z m-4 10 3 3 5-5',
- file:'M14 2H4v20h16V8z M14 2v6h6 M8 13h8 M8 17h6',
- download:'M12 3v12 m-5-5 5 5 5-5 M4 16v5h16v-5',
- eye:'M2 12s4-7 10-7 10 7 10 7-4 7-10 7-10-7-10-7Z M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z',
- paw:'M8 14c-1 0-4 4-4 6 0 3 4 2 8 2s8 1 8-2c0-2-3-6-4-6-2-2-6-2-8 0Z M5 6a2 3 0 1 0 0 6 2 3 0 0 0 0-6Z M10 2a2 3 0 1 0 0 6 2 3 0 0 0 0-6Z M16 2a2 3 0 1 0 0 6 2 3 0 0 0 0-6Z M21 6a2 3 0 1 0 0 6 2 3 0 0 0 0-6Z',
- warning:'m12 3 10 18H2z M12 9v5 M12 17v1',
- edit:'m16 3 5 5-12 12-6 1 1-6z M14 5l5 5',
- phone:'M6 3h4l1 5-3 2a16 16 0 0 0 6 6l2-3 5 1v4c-1 5-8 2-13-3S1 4 6 3Z',
- sun:'M12 16a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z M12 2v2 M12 20v2 M2 12h2 M20 12h2 M5 5l1 1 M18 18l1 1 M5 19l1-1 M18 6l1-1',
- logout:'M9 3H3v18h6 M8 12h13 m-5-5 5 5-5 5',
- link:'M10 13a5 5 0 0 0 7 0l4-4a5 5 0 0 0-7-7l-2 2 M14 11a5 5 0 0 0-7 0l-4 4a5 5 0 0 0 7 7l2-2',
- filter:'M3 5h18L14 13v7l-4-2v-5z',
- stethoscope:'M4 3v5a5 5 0 0 0 10 0V3 M2 3h4 M12 3h4 M9 13v4a4 4 0 0 0 8 0v-3 M17 14a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z'
+  leaf: "M5 15C5 7 13 3 21 3c0 8-4 16-12 16-3 0-4-2-4-4Z M5 21 16 10",
+  grid: "M3 3h7v7H3z M14 3h7v7h-7z M3 14h7v7H3z M14 14h7v7h-7z",
+  heart:
+    "M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1.1-1.1a5.5 5.5 0 0 0-7.8 7.8L12 21l8.8-8.6a5.5 5.5 0 0 0 0-7.8Z",
+  clipboard: "M9 4H5v17h14V4h-4 M9 2h6v4H9z M8 11h8 M8 15h5",
+  calendar: "M4 5h16v16H4z M8 3v4 M16 3v4 M4 10h16 M8 14h2 M14 14h2",
+  chat: "M21 11a8 8 0 0 1-8 8H5l-3 3V11a9 9 0 0 1 19 0Z M7 10h10 M7 14h6",
+  users:
+    "M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2 M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z M17 4a4 4 0 0 1 0 8 M22 21v-2a4 4 0 0 0-3-4",
+  settings:
+    "M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8Z M9 3l-1 3-3 1-2 3 2 3v3l3 2 3-1 3 1 3-2v-3l2-3-2-3-3-1-1-3Z",
+  chart: "M4 3v18h17 M8 16v-4 M13 16V8 M18 16V5",
+  building: "M4 21V4h12v17 M16 10h5v11 M8 8h4 M8 12h4 M8 16h4 M2 21h21",
+  wallet: "M3 7V4h16v3 M3 7h18v14H3z M15 12h6v5h-6z",
+  search: "M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16Z m6-2 5 5",
+  bell: "M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9 M10 21h4",
+  chevron: "m9 5 7 7-7 7",
+  down: "m6 9 6 6 6-6",
+  plus: "M12 5v14 M5 12h14",
+  arrow: "M5 12h14 m-6-6 6 6-6 6",
+  back: "M19 12H5 m6-6-6 6 6 6",
+  check: "m5 12 4 4L19 6",
+  close: "m6 6 12 12 M6 18 18 6",
+  clock: "M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20Z M12 6v6l4 2",
+  shield: "m12 2 8 4v6c0 6-8 10-8 10S4 18 4 12V6z m-4 10 3 3 5-5",
+  file: "M14 2H4v20h16V8z M14 2v6h6 M8 13h8 M8 17h6",
+  download: "M12 3v12 m-5-5 5 5 5-5 M4 16v5h16v-5",
+  eye: "M2 12s4-7 10-7 10 7 10 7-4 7-10 7-10-7-10-7Z M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z",
+  paw: "M8 14c-1 0-4 4-4 6 0 3 4 2 8 2s8 1 8-2c0-2-3-6-4-6-2-2-6-2-8 0Z M5 6a2 3 0 1 0 0 6 2 3 0 0 0 0-6Z M10 2a2 3 0 1 0 0 6 2 3 0 0 0 0-6Z M16 2a2 3 0 1 0 0 6 2 3 0 0 0 0-6Z M21 6a2 3 0 1 0 0 6 2 3 0 0 0 0-6Z",
+  warning: "m12 3 10 18H2z M12 9v5 M12 17v1",
+  edit: "m16 3 5 5-12 12-6 1 1-6z M14 5l5 5",
+  phone: "M6 3h4l1 5-3 2a16 16 0 0 0 6 6l2-3 5 1v4c-1 5-8 2-13-3S1 4 6 3Z",
+  sun: "M12 16a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z M12 2v2 M12 20v2 M2 12h2 M20 12h2 M5 5l1 1 M18 18l1 1 M5 19l1-1 M18 6l1-1",
+  logout: "M9 3H3v18h6 M8 12h13 m-5-5 5 5-5 5",
+  link: "M10 13a5 5 0 0 0 7 0l4-4a5 5 0 0 0-7-7l-2 2 M14 11a5 5 0 0 0-7 0l-4 4a5 5 0 0 0 7 7l2-2",
+  filter: "M3 5h18L14 13v7l-4-2v-5z",
+  stethoscope:
+    "M4 3v5a5 5 0 0 0 10 0V3 M2 3h4 M12 3h4 M9 13v4a4 4 0 0 0 8 0v-3 M17 14a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z",
 };
-export const icon = (name, cls='') => `<svg class="icon ${cls}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${paths[name]||paths.heart}"/></svg>`;
-export const logo = () => `<svg viewBox="0 0 40 40" class="brand-mark" aria-hidden="true"><rect width="40" height="40" rx="13" fill="currentColor"/><path d="M10 23c0-9 9-15 21-13 1 12-5 21-13 21-4 0-8-4-8-8Z" fill="#fff"/><path d="m15 27 11-11M18 23v-6m4 3h6" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/></svg>`;
-export const petArt = (species='犬', color='#DCA86F', large=false) => species==='猫' ? `<svg class="pet-art ${large?'large':''}" viewBox="0 0 160 160" aria-hidden="true"><rect width="160" height="160" rx="40" fill="#F2EBE0"/><path d="m37 69-2-39 31 23h29l30-23-2 39c20 63-16 67-44 67S17 129 37 69Z" fill="${color}"/><path d="m43 43 16 15-14 13Z M115 43 101 58l12 13Z" fill="#E6A89D"/><path d="M62 85v6 M98 85v6" stroke="#393A35" stroke-width="7" stroke-linecap="round"/><path d="m75 99 5 6 5-6Z" fill="#6A554A"/><path d="M80 105v6m0 0-7 4m7-4 7 4 M48 101H28 M48 110l-20 4 M112 101h20 M112 110l20 4" stroke="#6A554A" stroke-width="2" fill="none"/></svg>` : `<svg class="pet-art ${large?'large':''}" viewBox="0 0 160 160" aria-hidden="true"><rect width="160" height="160" rx="40" fill="#F2EBE0"/><ellipse cx="80" cy="115" rx="45" ry="30" fill="${color}"/><path d="M50 55C27 29 14 50 24 85c6 20 20 11 29 1 M110 55c23-26 36-5 26 30-6 20-20 11-29 1" fill="#AC784D"/><path d="M37 83c0-51 86-51 86 0v17c0 44-86 44-86 0Z" fill="${color}"/><path d="M67 47c9-6 17-6 26 0l-2 54H68Z" fill="#FFF6E7"/><ellipse cx="80" cy="109" rx="27" ry="20" fill="#FFF6E7"/><ellipse cx="60" cy="84" rx="4" ry="6" fill="#393A35"/><ellipse cx="101" cy="84" rx="4" ry="6" fill="#393A35"/><path d="M72 103q8-7 16 0-3 11-8 11t-8-11Z" fill="#493D35"/><path d="M80 114v5m-9 1q9 8 18 0" fill="none" stroke="#493D35" stroke-width="2" stroke-linecap="round"/><path d="M78 126q2 14 9 4v-5" fill="#CF8D83"/></svg>`;
+export const icon = (name, cls = "") =>
+  `<svg class="icon ${cls}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${paths[name] || paths.heart}"/></svg>`;
+export const logo = () =>
+  `<svg viewBox="0 0 40 40" class="brand-mark" aria-hidden="true"><rect width="40" height="40" rx="13" fill="currentColor"/><path d="M10 23c0-9 9-15 21-13 1 12-5 21-13 21-4 0-8-4-8-8Z" fill="#fff"/><path d="m15 27 11-11M18 23v-6m4 3h6" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/></svg>`;
+export const petArt = (species = "犬", color = "#DCA86F", large = false) =>
+  species === "猫"
+    ? `<svg class="pet-art ${large ? "large" : ""}" viewBox="0 0 160 160" aria-hidden="true"><rect width="160" height="160" rx="40" fill="#F2EBE0"/><path d="m37 69-2-39 31 23h29l30-23-2 39c20 63-16 67-44 67S17 129 37 69Z" fill="${color}"/><path d="m43 43 16 15-14 13Z M115 43 101 58l12 13Z" fill="#E6A89D"/><path d="M62 85v6 M98 85v6" stroke="#393A35" stroke-width="7" stroke-linecap="round"/><path d="m75 99 5 6 5-6Z" fill="#6A554A"/><path d="M80 105v6m0 0-7 4m7-4 7 4 M48 101H28 M48 110l-20 4 M112 101h20 M112 110l20 4" stroke="#6A554A" stroke-width="2" fill="none"/></svg>`
+    : `<svg class="pet-art ${large ? "large" : ""}" viewBox="0 0 160 160" aria-hidden="true"><rect width="160" height="160" rx="40" fill="#F2EBE0"/><ellipse cx="80" cy="115" rx="45" ry="30" fill="${color}"/><path d="M50 55C27 29 14 50 24 85c6 20 20 11 29 1 M110 55c23-26 36-5 26 30-6 20-20 11-29 1" fill="#AC784D"/><path d="M37 83c0-51 86-51 86 0v17c0 44-86 44-86 0Z" fill="${color}"/><path d="M67 47c9-6 17-6 26 0l-2 54H68Z" fill="#FFF6E7"/><ellipse cx="80" cy="109" rx="27" ry="20" fill="#FFF6E7"/><ellipse cx="60" cy="84" rx="4" ry="6" fill="#393A35"/><ellipse cx="101" cy="84" rx="4" ry="6" fill="#393A35"/><path d="M72 103q8-7 16 0-3 11-8 11t-8-11Z" fill="#493D35"/><path d="M80 114v5m-9 1q9 8 18 0" fill="none" stroke="#493D35" stroke-width="2" stroke-linecap="round"/><path d="M78 126q2 14 9 4v-5" fill="#CF8D83"/></svg>`;
