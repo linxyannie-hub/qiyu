@@ -69,7 +69,7 @@ function route() {
   return {
     role: Object.hasOwn(roles, role) ? role : "clinic",
     page: page || "dashboard",
-    id: id || "",
+    id: id ? decodeURIComponent(id) : "",
   };
 }
 function href(role, page, id = "") {
@@ -80,7 +80,8 @@ function go(role, page, id) {
 }
 function actor() {
   const r = route();
-  if (r.role !== "family") return roles[r.role].person;
+  if (r.role !== "family")
+    return r.role === "clinic" ? state().clinic.contact : roles[r.role].person;
   const p = selectedPet();
   const names = p.members
     .filter((m) => m.active && (!m.expires || m.expires >= day()))
@@ -135,7 +136,7 @@ function roleMenu() {
   )
     .map(
       ([key, r]) =>
-        `<a href="${href(key, key === "family" ? "today" : "dashboard")}">${icon({ clinic: "building", family: "heart", doctor: "stethoscope", ops: "chart" }[key])}<div>${r.name}<small>${r.person} · ${r.title}</small></div></a>`,
+        `<a href="${href(key, key === "family" ? "today" : "dashboard")}">${icon({ clinic: "building", family: "heart", doctor: "stethoscope", ops: "chart" }[key])}<div>${r.name}<small>${key === "clinic" ? esc(state().clinic.contact) : r.person} · ${r.title}</small></div></a>`,
     )
     .join("")}</div></details>`;
 }
@@ -167,7 +168,12 @@ function desktopShell(content) {
   const r = route(),
     s = state();
   const nav = navs[r.role];
-  return `<div class="shell"><aside class="sidebar"><a class="brand" href="${href(r.role, "dashboard")}">${logo()}<div><strong>栖愈</strong><small>QIYU CARE</small></div></a><div class="workspace-chip"><i class="dot"></i>${r.role === "ops" ? "栖愈机构服务中心" : esc(s.clinic.name)}</div><div class="nav-caption">工作空间</div><nav class="nav" aria-label="主导航">${nav.map(([page, ic, name]) => `<a class="${r.page === page ? "active" : ""}" ${r.page === page ? 'aria-current="page"' : ""} href="${href(r.role, page)}">${icon(ic)}${name}${page === "queue" && s.concerns.some((c) => c.status !== "resolved") ? `<span class="nav-count">${s.concerns.filter((c) => c.status !== "resolved").length}</span>` : ""}</a>`).join("")}</nav><div class="sidebar-bottom"><div class="sidebar-note"><h3>照护，是一件连续的事</h3><p>从一份出院安排开始<br>让每一次交接都有回应。</p></div><div class="sidebar-foot"><span class="avatar">${roles[r.role].person.slice(-2)}</span><div><b>${roles[r.role].person}</b><small>${roles[r.role].title}</small></div></div></div></aside><div class="main-shell"><header class="topbar"><button class="icon-btn mobile-menu" data-action="menu" aria-label="打开导航">${icon("grid")}</button><div class="breadcrumb">${r.role === "ops" ? "机构服务中心" : esc(s.clinic.name)}${icon("chevron")}<strong>${nav.find((n) => n[0] === r.page)?.[2] || "病例详情"}</strong></div><div class="top-actions"><button class="global-search" data-action="search">${icon("search")}<span>搜索宠物、主人或事项</span><kbd>⌘ K</kbd></button><button class="icon-btn notification-dot" data-action="notifications" aria-label="查看待办消息">${icon("bell")}</button>${roleMenu()}<span class="avatar">${roles[r.role].person.slice(-2)}</span></div></header><main id="main" class="content">${content}${foot()}</main></div></div>`;
+  return `<div class="shell"><aside class="sidebar"><a class="brand" href="${href(r.role, "dashboard")}">${logo()}<div><strong>栖愈</strong><small>QIYU CARE</small></div></a><div class="workspace-chip"><i class="dot"></i>${r.role === "ops" ? "栖愈机构服务中心" : esc(s.clinic.name)}</div><div class="nav-caption">工作空间</div><nav class="nav" aria-label="主导航">${nav.map(([page, ic, name]) => `<a class="${r.page === page ? "active" : ""}" ${r.page === page ? 'aria-current="page"' : ""} href="${href(r.role, page)}">${icon(ic)}${name}${page === "queue" && s.concerns.some((c) => c.status !== "resolved") ? `<span class="nav-count">${s.concerns.filter((c) => c.status !== "resolved").length}</span>` : ""}</a>`).join("")}</nav><div class="sidebar-bottom"><div class="sidebar-note"><h3>照护，是一件连续的事</h3><p>从一份出院安排开始<br>让每一次交接都有回应。</p></div><div class="sidebar-foot"><span class="avatar">${esc(actor().slice(-2))}</span><div><b>${esc(actor())}</b><small>${roles[r.role].title}</small></div></div></div></aside><div class="main-shell"><header class="topbar"><button class="icon-btn mobile-menu" data-action="menu" aria-label="打开导航">${icon("grid")}</button><div class="breadcrumb">${r.role === "ops" ? "机构服务中心" : esc(s.clinic.name)}${icon("chevron")}<strong>${nav.find((n) => n[0] === r.page)?.[2] || (r.page === "support" ? "机构支持" : "病例详情")}</strong></div><div class="top-actions"><button class="global-search" data-action="search">${icon("search")}<span>${r.role === "ops" ? "搜索合作机构或负责人" : "搜索宠物、主人或事项"}</span><kbd>⌘ K</kbd></button><button class="icon-btn notification-dot" data-action="notifications" aria-label="查看待办消息">${icon("bell")}</button>${roleMenu()}<span class="avatar">${esc(actor().slice(-2))}</span></div></header><main id="main" class="content">${content}${foot()}</main></div></div>`;
+}
+function activeMembers(p) {
+  return p.members.filter(
+    (m) => m.active && (!m.expires || m.expires >= day()),
+  );
 }
 function familyShell(content) {
   const r = route(),
@@ -178,15 +184,19 @@ function familyShell(content) {
     ["messages", "chat", "消息"],
     ["me", "heart", "我的"],
   ];
-  return `<div class="family-shell"><header class="family-top"><a class="brand" href="${href("family", "today")}">${logo()}<div><strong>栖愈</strong></div></a><nav class="family-nav" aria-label="家庭导航">${nav.map(([page, ic, label]) => `<a href="${href("family", page, p.id)}" class="${r.page === page ? "active" : ""}">${icon(ic)}${label}</a>`).join("")}</nav>${roleMenu()}</header><main id="main" class="family-content"><div class="family-petbar">${petArt(p.species, p.color)}<div><strong>${esc(p.name)}</strong><small>${esc(p.scene)} · ${esc(state().clinic.name)}</small></div><select class="filter-select" id="family-pet" aria-label="选择宠物">${state()
+  const count = state().concerns.filter(
+    (c) => c.petId === p.id && ["answered", "supplement"].includes(c.status),
+  ).length;
+  return `<div class="phone-stage"><aside class="phone-intro"><a class="brand" href="${href("clinic", "dashboard")}">${logo()}<div><strong>栖愈</strong><small>QIYU CARE</small></div></a><div class="eyebrow">CARE THAT STAYS WITH YOU</div><h1>照护在手，<br>安心相伴。</h1><p>一份清楚的安排，<br>一段有人回应的照护。</p><div class="phone-intro-detail">${icon("shield")}与你的原医院，持续连接</div>${roleMenu()}</aside><div class="phone-frame"><div class="phone-screen"><div class="phone-status"><time>${timeStr(new Date())}</time><div class="phone-island"></div><span><svg viewBox="0 0 54 18" width="54" height="18" aria-hidden="true"><path d="M1 13v3M5 10v6M9 7v9M13 4v12" stroke="currentColor" stroke-width="2.5"/><path d="M21 7q6-6 12 0M24 10q3-3 6 0M27 13v1" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><rect x="38" y="5" width="13" height="9" rx="2" stroke="currentColor" fill="none"/><rect x="40" y="7" width="9" height="5" rx="1" fill="currentColor"/><path d="M53 8v3" stroke="currentColor" stroke-width="1.5"/></svg></span></div><div class="family-shell"><header class="family-top"><a class="brand" href="${href("family", "today", p.id)}">${logo()}<strong>栖愈</strong></a><div class="mini-capsule"><button data-action="family-more" aria-label="打开小程序菜单"><span class="capsule-dots">•••</span></button><i></i><a href="${href("family", "today", p.id)}" aria-label="回到今天"><span class="capsule-home"></span></a></div></header><main id="main" class="family-content"><div class="family-petbar">${petArt(p.species, p.color)}<div><strong>${esc(p.name)}</strong><small>${esc(p.scene)} · ${esc(state().clinic.name)}</small></div><select class="filter-select" id="family-pet" aria-label="选择宠物">${state()
     .pets.map(
       (pet) =>
-        `<option value="${pet.id}" ${p.id === pet.id ? "selected" : ""}>${esc(pet.name)}的照护</option>`,
+        `<option value="${pet.id}" ${p.id === pet.id ? "selected" : ""}>${esc(pet.name)}${pet.status === "ended" ? " · 已结束" : "的照护"}</option>`,
     )
     .join(
       "",
-    )}</select></div>${content}${foot()}</main><nav class="mobile-bottom" aria-label="家庭导航">${nav.map(([page, ic, label]) => `<a href="${href("family", page, p.id)}" class="${r.page === page ? "active" : ""}" ${r.page === page ? 'aria-current="page"' : ""}>${icon(ic)}${label}</a>`).join("")}</nav></div>`;
+    )}</select></div>${content}</main><nav class="mobile-bottom" aria-label="家庭导航">${nav.map(([page, ic, label]) => `<a href="${href("family", page, p.id)}" class="${r.page === page ? "active" : ""}" ${r.page === page ? 'aria-current="page"' : ""}>${icon(ic)}<span>${label}</span>${page === "messages" && count ? `<i class="nav-message-dot">${count}</i>` : ""}</a>`).join("")}</nav><div class="phone-home-indicator"></div></div></div></div><aside class="phone-side-note"><span class="phone-note-icon">${icon("leaf")}</span><h2>从出院，到回归日常。</h2><p>安排清楚可见<br>家人轻松交接<br>问题有人接手</p><span class="phone-note-line"></span><small>连续照护，安心相伴</small></aside></div>`;
 }
+
 function stat(label, number, sub, ic = "heart", suffix = "", green = false) {
   return `<div class="stat"><div class="stat-top">${esc(label)}${icon(ic)}</div><div class="stat-number">${number}<small>${suffix}</small></div><div class="stat-foot ${green ? "green" : ""}">${green ? icon("check") : ""}${esc(sub)}</div></div>`;
 }
@@ -198,7 +208,7 @@ function clinicDashboard() {
     n = s.pets.filter((p) => p.status === "active").length;
   const pending =
     r.role === "doctor" ? open.filter((c) => c.status === "clinical") : open;
-  return `${head(`${roles[r.role].person}，今天也辛苦了`, dateLabel() + " · 每一次及时回应，都让照护更安心。", r.role === "clinic" ? btn("新建出院计划", "new-plan", "", "primary", "plus") : linkBtn("查看专业待办", href("doctor", "clinical"), "primary", "stethoscope"))}<section class="hero"><div><div class="eyebrow">CONTINUOUS CARE, TOGETHER</div><h2>让出院后的每一天，都有人接住。</h2><p>家庭认真记录每一次照护，你的团队及时接手每一个问题。<br>把零散沟通，连接成有始有终的安心服务。</p><a class="hero-link" href="${href(r.role, r.role === "doctor" ? "clinical" : "queue")}">查看今天需要关注的事项 ${icon("arrow")}</a></div><div class="hero-illustration"><div class="hero-orbit"></div><div class="hero-mini">${icon("shield")}<div><b>当前安排，清楚可见</b><br><small>家人与医院同步协作</small></div></div><div class="hero-pet">${petArt("犬", "#D4AF78")}</div><div class="hero-mini bottom">${icon("heart")}<div><b>每一次照护，都有回应</b><br><small>陪伴不止于出院</small></div></div></div></section><section class="stats" aria-label="服务指标">${stat("进行中的照护", n, "已接收并开始执行", "heart", "只宠物", true)}${stat(r.role === "doctor" ? "待专业判断" : "等待团队处理", pending.length, r.role === "doctor" ? "由兽医确认下一步" : "有责任人的协同队列", "chat", "项")}${stat("已确认复查", apps.length, "按医院确认的时间到院", "calendar", "项")}${stat("正式安排已交付", s.plans.filter((p) => p.status === "published").length, "来源与签发信息完整", "shield", "份", true)}</section><div class="dashboard-grid"><section class="card"><div class="card-head"><div><h2>需要关注的事项 <span class="count-dot">${pending.length}</span></h2><p>先处理需要你行动的事，让每一份求助都有着落。</p></div><a class="text-btn" href="${href(r.role, r.role === "doctor" ? "clinical" : "queue")}">全部事项 ${icon("chevron")}</a></div>${queueTabs(pending)}${concernTable(pending.slice(0, 5), true)}<div class="table-footer"><span>普通执行记录已汇总至病例</span><span>显示 ${pending.length} 项</span></div></section><aside class="stack"><section class="card"><div class="card-head"><h2>近期复查</h2><a class="text-btn" href="${href(r.role, r.role === "clinic" ? "appointments" : "pets")}">${icon("arrow")}</a></div>${
+  return `${head(`${actor()}，今天也辛苦了`, dateLabel() + " · 每一次及时回应，都让照护更安心。", r.role === "clinic" ? btn("新建出院计划", "new-plan", "", "primary", "plus") : linkBtn("查看专业待办", href("doctor", "clinical"), "primary", "stethoscope"))}<section class="hero"><div><div class="eyebrow">CONTINUOUS CARE, TOGETHER</div><h2>让出院后的每一天，都有人接住。</h2><p>家庭认真记录每一次照护，你的团队及时接手每一个问题。<br>把零散沟通，连接成有始有终的安心服务。</p><a class="hero-link" href="${href(r.role, r.role === "doctor" ? "clinical" : "queue")}">查看今天需要关注的事项 ${icon("arrow")}</a></div><div class="hero-illustration"><div class="hero-orbit"></div><div class="hero-mini">${icon("shield")}<div><b>当前安排，清楚可见</b><br><small>家人与医院同步协作</small></div></div><div class="hero-pet">${petArt("犬", "#D4AF78")}</div><div class="hero-mini bottom">${icon("heart")}<div><b>每一次照护，都有回应</b><br><small>陪伴不止于出院</small></div></div></div></section><section class="stats" aria-label="服务指标">${stat("进行中的照护", n, "已接收并开始执行", "heart", "只宠物", true)}${stat(r.role === "doctor" ? "待专业判断" : "等待团队处理", pending.length, r.role === "doctor" ? "由兽医确认下一步" : "有责任人的协同队列", "chat", "项")}${stat("已确认复查", apps.length, "按医院确认的时间到院", "calendar", "项")}${stat("正式安排已交付", s.plans.filter((p) => p.status === "published").length, "来源与签发信息完整", "shield", "份", true)}</section><div class="dashboard-grid"><section class="card"><div class="card-head"><div><h2>需要关注的事项 <span class="count-dot">${pending.length}</span></h2><p>先处理需要你行动的事，让每一份求助都有着落。</p></div><a class="text-btn" href="${href(r.role, r.role === "doctor" ? "clinical" : "queue")}">全部事项 ${icon("chevron")}</a></div>${queueTabs(pending)}${concernTable(pending.slice(0, 5), true)}<div class="table-footer"><span>普通执行记录已汇总至病例</span><span>显示 ${pending.length} 项</span></div></section><aside class="stack"><section class="card"><div class="card-head"><h2>近期复查</h2><a class="text-btn" href="${href(r.role, r.role === "clinic" ? "appointments" : "pets")}">${icon("arrow")}</a></div>${
     apps
       .slice(0, 3)
       .map((a) => {
@@ -218,8 +228,11 @@ function queueTabs(list) {
   return `<div class="tabs" role="tablist" aria-label="事项状态">${[
     ["all", "全部事项"],
     ["new", "待接收"],
+    ["accepted", "已接手"],
+    ["supplement", "待补充"],
     ["clinical", "待专业判断"],
     ["answered", "已答复"],
+    ["action", "待行动"],
     ["resolved", "已解决"],
   ]
     .map(
@@ -254,12 +267,7 @@ function queuePage() {
     s = state(),
     cs =
       r.role === "doctor"
-        ? s.concerns.filter(
-            (c) =>
-              ["clinical", "answered", "supplement", "resolved"].includes(
-                c.status,
-              ) && c.assignee === "陈予安",
-          )
+        ? s.concerns.filter((c) => c.assigneeRole === "doctor")
         : s.concerns;
   return `${head(r.role === "doctor" ? "专业待办" : "协同待办", r.role === "doctor" ? "事实、来源和专业决定，在同一处清楚衔接。" : "家庭提出的问题，落实到具体的责任人与下一步。")}<div class="toolbar"><label class="search-input">${icon("search")}<input id="list-search" placeholder="搜索宠物、主人或问题" value="${esc(search)}" aria-label="搜索事项"></label><span class="subtle">共 ${cs.length} 项 · ${cs.filter((c) => c.status !== "resolved").length} 项未结</span></div><section class="card">${queueTabs(cs)}${concernTable(cs)}</section>`;
 }
@@ -323,7 +331,7 @@ function casePage() {
   const plan = currentPlan(s, p.id),
     latest = latestPlan(s, p.id),
     cs = s.concerns.filter((c) => c.petId === p.id);
-  return `<div class="section-gap"><a class="text-btn" href="${href(r.role, "pets")}">${icon("back")}返回服务病例</a></div><header class="pet-header">${petArt(p.species, p.color)}<div><h1>${esc(p.name)}</h1><p>${esc(p.breed)} · ${esc(p.age)} · ${esc(p.weight)}</p><div style="margin-top:8px">${pBadge(p)} ${badge(p.scene, "")}</div></div><div class="actions">${btn("导出资料", "export-pet", p.id, "", "download")}${r.role === "doctor" && plan && p.status !== "ended" ? btn("调整照护安排", "revise", p.id, "primary", "edit") : ""}${r.role === "clinic" && p.status !== "ended" ? btn("结束本轮服务", "end", p.id, "", "check") : ""}</div></header><div class="case-grid"><div class="stack"><section class="card pad"><div class="field-action"><h2>当前照护安排</h2>${plan ? badge("已由医生确认") : badge("尚未正式发布", "amber")}</div>${plan ? `<p class="subtle" style="margin-top:8px">${esc(plan.author)} · ${fmt(plan.publishedAt, true)}发布</p>${instructionList(plan)}<div class="notice">${icon("file")}<div>来源：${esc(plan.source)}<br><button class="text-btn" data-action="source" data-id="${plan.id}">查看指导单 ${icon("chevron")}</button></div></div>` : `${empty("等待正式安排", "护理准备完成后，由医生审核发布。")}${latest ? `<div class="actions">${badge({ draft: "草稿", review: "待医生审核", returned: "待补充" }[latest.status] || "草稿", "amber")}${r.role === "clinic" ? btn("打开草稿", "edit-plan", latest.id, "soft", "edit") : btn("审核计划", "approve", latest.id, "primary", "clipboard")}</div>` : ""}`}</section><section class="card pad"><h2 class="section-gap">家庭执行记录</h2>${eventTimeline(p.id)}</section></div><aside class="stack"><section class="card pad"><h2 class="section-gap">本轮服务</h2><dl class="info-list"><div><dt>主人</dt><dd>${esc(p.owner)}</dd></div><div><dt>联系信息</dt><dd>${esc(p.phone || "待补充")}</dd></div><div><dt>家庭照护人</dt><dd>${esc(p.member)}</dd></div><div><dt>随访协调员</dt><dd>${esc(s.clinic.contact)}</dd></div><div><dt>服务时间</dt><dd>${esc(s.clinic.hours)}</dd></div><div><dt>服务医院</dt><dd>${esc(s.clinic.name)}</dd></div></dl>${p.status === "ended" ? `<div class="notice">${icon("check")}<div>本轮已结束<br>${esc(p.endReason)}</div></div>` : ""}</section><section class="card"><div class="card-head"><h2>问题与反馈</h2><span class="count-dot">${cs.filter((c) => c.status !== "resolved").length} 未结</span></div>${cs.map((c) => `<button class="family-concern full" style="width:100%;text-align:left" data-action="concern-detail" data-id="${c.id}"><div><h3>${esc(c.title)}</h3><p>${esc(c.assignee || "等待医院接手")}</p>${cBadge(c)}</div>${icon("chevron")}</button>`).join("") || empty("暂无问题")}</section><section class="card pad"><h2 class="section-gap">复查安排</h2>${appointmentCards(p.id)}${r.role === "clinic" && p.status !== "ended" ? btn("安排复查", "appointment", p.id, "soft full", "calendar") : ""}</section></aside></div>`;
+  return `<div class="section-gap"><a class="text-btn" href="${href(r.role, "pets")}">${icon("back")}返回服务病例</a></div><header class="pet-header">${petArt(p.species, p.color)}<div><h1>${esc(p.name)}</h1><p>${esc(p.breed)} · ${esc(p.age)} · ${esc(p.weight)}</p><div style="margin-top:8px">${pBadge(p)} ${badge(p.scene, "")}</div></div><div class="actions">${r.role === "clinic" ? btn("编辑资料", "edit-pet", p.id, "", "edit") : ""}${r.role === "clinic" && p.status === "ended" ? btn("建立新一轮照护", "new-round", p.id, "primary", "plus") : ""}${btn("导出资料", "export-pet", p.id, "", "download")}${r.role === "doctor" && plan && p.status !== "ended" ? btn("调整照护安排", "revise", p.id, "primary", "edit") : ""}${r.role === "clinic" && p.status !== "ended" ? btn("结束本轮服务", "end", p.id, "", "check") : ""}</div></header><div class="case-grid"><div class="stack"><section class="card pad"><div class="field-action"><h2>当前照护安排</h2>${plan ? badge("已由医生确认") : badge("尚未正式发布", "amber")}</div>${futurePlanNotice(p.id)}${plan ? `<p class="subtle" style="margin-top:8px">${esc(plan.author)} · ${fmt(plan.publishedAt, true)}发布</p>${instructionList(plan)}<div class="notice">${icon("file")}<div>来源：${esc(plan.source)}<br><button class="text-btn" data-action="source" data-id="${plan.id}">查看指导单 ${icon("chevron")}</button></div></div>` : `${empty("等待正式安排", "护理准备完成后，由医生审核发布。")}${latest ? `<div class="actions">${badge({ draft: "草稿", review: "待医生审核", returned: "待补充" }[latest.status] || "草稿", "amber")}${r.role === "clinic" ? btn("打开草稿", "edit-plan", latest.id, "soft", "edit") : latest.status === "review" ? btn("审核计划", "approve", latest.id, "primary", "clipboard") : badge("待护理补充", "amber")}</div>` : ""}`}</section><section class="card pad"><h2 class="section-gap">家庭执行记录</h2>${eventTimeline(p.id)}</section></div><aside class="stack"><section class="card pad"><h2 class="section-gap">本轮服务</h2>${p.previousServiceId ? `<a class="text-btn" href="${href(r.role, "case", p.previousServiceId)}">${icon("file")}查看上一轮服务资料</a>` : ""}<dl class="info-list"><div><dt>主人</dt><dd>${esc(p.owner)}</dd></div><div><dt>联系信息</dt><dd>${esc(p.phone || "待补充")}</dd></div><div><dt>家庭照护人</dt><dd>${esc(p.member)}</dd></div><div><dt>随访协调员</dt><dd>${esc(s.clinic.contact)}</dd></div><div><dt>服务时间</dt><dd>${esc(s.clinic.hours)}</dd></div><div><dt>服务医院</dt><dd>${esc(s.clinic.name)}</dd></div></dl>${p.status === "ended" ? `<div class="notice">${icon("check")}<div>本轮已结束<br>${esc(p.endReason)}</div></div>` : ""}</section><section class="card"><div class="card-head"><h2>问题与反馈</h2><span class="count-dot">${cs.filter((c) => c.status !== "resolved").length} 未结</span></div>${cs.map((c) => `<button class="family-concern full" style="width:100%;text-align:left" data-action="concern-detail" data-id="${c.id}"><div><h3>${esc(c.title)}</h3><p>${esc(c.assignee || "等待医院接手")}</p>${cBadge(c)}</div>${icon("chevron")}</button>`).join("") || empty("暂无问题")}</section><section class="card pad"><h2 class="section-gap">复查安排</h2>${appointmentCards(p.id)}${r.role === "clinic" && p.status !== "ended" ? btn("安排复查", "appointment", p.id, "soft full", "calendar") : ""}</section></aside></div>`;
 }
 function planPage() {
   const s = state(),
@@ -350,17 +358,25 @@ function planPage() {
       : ""
   }`;
 }
-function appointmentCards(petId) {
+function appointmentCards(petId, compact = false) {
   const s = state(),
     r = route(),
     list = s.appointments
-      .filter((a) => a.petId === petId)
-      .sort((a, b) => b.date.localeCompare(a.date));
+      .filter(
+        (a) =>
+          a.petId === petId &&
+          (!compact || ["requested", "confirmed"].includes(a.status)),
+      )
+      .sort((a, b) =>
+        compact
+          ? a.date.localeCompare(b.date) || a.time.localeCompare(b.time)
+          : b.date.localeCompare(a.date),
+      );
   return list.length
     ? list
         .map(
           (a) =>
-            `<div class="metric-detail"><div class="field-action"><b>${fmt(a.date)} ${esc(a.time)}</b>${badge(appointmentLabels[a.status], a.status === "requested" ? "amber" : "green")}</div><p>${esc(a.note)}</p><div class="actions" style="margin-top:9px">${r.role === "clinic" && a.status === "requested" ? btn("确认时间", "confirm-appointment", a.id, "small soft", "check") : ""}${r.role === "clinic" && a.status === "confirmed" ? btn("记录已到院", "complete-appointment", a.id, "small soft", "check") : ""}${["family", "clinic"].includes(r.role) && ["requested", "confirmed"].includes(a.status) ? btn("取消预约", "cancel-appointment", a.id, "small", "close") : ""}</div></div>`,
+            `<div class="metric-detail"><div class="field-action"><b>${fmt(a.date)} ${esc(a.time)}</b>${badge(appointmentLabels[a.status], a.status === "requested" ? "amber" : "green")}</div><p>${esc(a.note)}${a.replacesId ? " · 改约申请" : ""}</p><div class="actions" style="margin-top:9px">${r.role === "clinic" && a.status === "requested" ? btn("确认时间", "confirm-appointment", a.id, "small soft", "check") : ""}${r.role === "clinic" && a.status === "confirmed" ? btn("记录已到院", "complete-appointment", a.id, "small soft", "check") : ""}${["family", "clinic"].includes(r.role) && ["requested", "confirmed"].includes(a.status) && !s.appointments.some((x) => x.replacesId === a.id && x.status === "requested") ? btn("调整时间", "reschedule", a.id, "small soft", "calendar") : ""}${["family", "clinic"].includes(r.role) && ["requested", "confirmed"].includes(a.status) ? btn("取消预约", "cancel-appointment", a.id, "small", "close") : ""}</div></div>`,
         )
         .join("")
     : empty("暂无复查安排", "可以向医院申请复查时间。");
@@ -371,7 +387,7 @@ function appointmentsPage() {
   return `${head("复查安排", "申请、确认与到院分别记录，让下一次见面顺畅衔接。", btn("安排复查", "appointment", "", "primary", "plus"))}<section class="stats">${stat("待确认申请", list.filter((a) => a.status === "requested").length, "需要院方确认时段", "calendar", "项")}${stat("已确认复查", list.filter((a) => a.status === "confirmed").length, "已向家庭交付安排", "check", "项", true)}${stat("已完成复查", list.filter((a) => a.status === "completed").length, "到院情况已记录", "heart", "项", true)}${stat("当前服务病例", s.pets.filter((p) => p.status === "active").length, "持续跟进中的宠物", "paw", "只")}</section><section class="card"><div class="table-wrap"><table class="data-table"><thead><tr><th>宠物与家庭</th><th>复查时间</th><th>预约状态</th><th>备注</th><th>操作</th></tr></thead><tbody>${list
     .map((a) => {
       const p = petById(s, a.petId);
-      return `<tr><td>${petCell(p)}</td><td>${fmt(a.date)} ${esc(a.time)}</td><td>${badge(appointmentLabels[a.status], a.status === "requested" ? "amber" : "green")}</td><td>${esc(a.note)}</td><td><div class="actions">${a.status === "requested" ? btn("确认时间", "confirm-appointment", a.id, "small soft", "check") : ""}${a.status === "confirmed" ? btn("已到院", "complete-appointment", a.id, "small soft", "check") : ""}${["requested", "confirmed"].includes(a.status) ? btn("取消", "cancel-appointment", a.id, "small") : ""}</div></td></tr>`;
+      return `<tr><td>${petCell(p)}</td><td>${fmt(a.date)} ${esc(a.time)}</td><td>${badge(appointmentLabels[a.status], a.status === "requested" ? "amber" : "green")}</td><td>${esc(a.note)}</td><td><div class="actions">${a.status === "requested" ? btn("确认时间", "confirm-appointment", a.id, "small soft", "check") : ""}${a.status === "confirmed" ? btn("已到院", "complete-appointment", a.id, "small soft", "check") : ""}${["requested", "confirmed"].includes(a.status) && !s.appointments.some((x) => x.replacesId === a.id && x.status === "requested") ? btn("改约", "reschedule", a.id, "small soft", "calendar") : ""}${["requested", "confirmed"].includes(a.status) ? btn("取消", "cancel-appointment", a.id, "small") : ""}</div></td></tr>`;
     })
     .join(
       "",
@@ -383,7 +399,9 @@ function reportsPage() {
     cs = s.concerns,
     received = cs.filter((c) => c.acceptedAt),
     onTime = received.filter(
-      (c) => mins(c.acceptedAt) - mins(c.createdAt) <= s.clinic.target,
+      (c) =>
+        (Date.parse(c.acceptedAt) - Date.parse(c.createdAt)) / 60000 <=
+        s.clinic.target,
     ),
     resolved = cs.filter((c) => c.status === "resolved");
   return `${head("服务报告", "以实际启用和处理记录为依据，持续改进每一次交付。", btn("导出服务报告", "export-report", "", "", "download"))}<section class="stats">${stat("有效服务启用", valid.length, `全部 ${s.pets.length} 个本轮服务`, "heart", "例", true)}${stat("已明确接手", received.length, `全部 ${cs.length} 个问题`, "users", "项")}${stat("已解决问题", resolved.length, `未结 ${cs.length - resolved.length} 项`, "check", "项", true)}${stat("已交付资料", s.pets.filter((p) => p.status === "ended").length, "已结束服务可获取资料", "file", "份")}</section><div class="settings-grid"><section class="card pad"><h2>服务过程概览</h2><p class="subtle" style="margin-top:5px">基于当前机构的业务记录</p><div class="chart-bars">${[
@@ -410,18 +428,18 @@ function reportsPage() {
 }
 function settingsPage() {
   const s = state();
-  return `${head("服务设置", "把负责人、服务时段和交接方式约定清楚。")}<div class="settings-grid"><section class="card pad"><h2 class="section-gap">机构服务信息</h2><form class="form" data-form="settings"><div class="form-grid">${field("医院名称", "name", s.clinic.name, "text", true)}${field("服务时间", "hours", s.clinic.hours, "text", true)}${field("院方联系电话", "phone", s.clinic.phone, "text", true)}${field("接单目标（分钟）", "target", s.clinic.target, "number", true)}${field("随访负责人", "contact", s.clinic.contact, "text", true)}${field("替补负责人", "backup", s.clinic.backup, "text", true)}</div><div class="form-error" role="alert"></div><div class="actions"><button class="btn primary" type="submit">${icon("check")}保存设置</button></div></form></section><div class="stack"><section class="card pad"><h2 class="section-gap">团队与职责</h2><div class="staff-list">${[
-    ["林晓", "随访协调员", "接单与交接"],
+  return `${head("服务设置", "把负责人、服务时段和交接方式约定清楚。")}<div class="settings-grid"><section class="card pad"><h2 class="section-gap">机构服务信息</h2><form class="form" data-form="settings"><div class="form-grid">${field("医院名称", "name", s.clinic.name, "text", true)}${field("服务时间", "hours", s.clinic.hours, "text", true)}${field("院方联系电话", "phone", s.clinic.phone, "text", true)}${field("接单目标（分钟）", "target", s.clinic.target, "number", true)}${field("随访负责人", "contact", s.clinic.contact, "text", true)}${field("替补负责人", "backup", s.clinic.backup, "text", true)}</div><div class="form-error" role="alert"></div><div class="actions"><button class="btn primary" type="submit">${icon("check")}保存设置</button></div></form><div class="divider"></div>${btn("联系栖愈机构支持", "ticket", "", "soft", "chat")}${linkBtn("查看支持进度", href("clinic", "support"), "", "arrow")}</section><div class="stack"><section class="card pad"><h2 class="section-gap">团队与职责</h2><div class="staff-list">${[
+    [s.clinic.contact, "随访协调员", "接单与交接"],
     ["陈予安", "主治兽医", "专业判断"],
-    ["王雨", "替补协调员", "协同接手"],
+    [s.clinic.backup, "替补协调员", "协同接手"],
   ]
     .map(
       ([name, title, b]) =>
-        `<div class="staff-row"><span class="avatar">${name.slice(-2)}</span><div><b>${name}</b><small>${title}</small></div>${badge(b, "")}</div>`,
+        `<div class="staff-row"><span class="avatar">${esc(name.slice(-2))}</span><div><b>${esc(name)}</b><small>${esc(title)}</small></div>${badge(b, "")}</div>`,
     )
     .join(
       "",
-    )}</div></section><section class="card pad"><h2>软件服务</h2><p class="subtle" style="margin-top:8px">${esc(s.settings.plan)} · 每例 ¥${s.settings.unitPrice}</p><div class="divider"></div><p class="subtle">同轮安排调整与复查改约不重复计费。</p><div style="margin-top:18px">${s.renewal ? badge("续订申请已提交", "blue") : btn("申请续订", "renewal", "", "soft", "arrow")}</div></section></div></div>`;
+    )}</div></section><section class="card pad"><h2>软件服务</h2><p class="subtle" style="margin-top:8px">${esc(s.settings.plan)} · 每例 ¥${s.settings.unitPrice}</p><div class="divider"></div><p class="subtle">同轮安排调整与复查改约不重复计费。</p><div style="margin-top:18px">${s.renewal ? badge(s.renewal.status === "completed" ? "续订已完成" : "续订申请已提交", s.renewal.status === "completed" ? "green" : "blue") : btn("申请续订", "renewal", "", "soft", "arrow")}</div></section></div></div>`;
 }
 function opsDashboard() {
   const s = state(),
@@ -450,7 +468,7 @@ function templatesPage() {
   return `${head("照护模板", "为医院提供结构化骨架，由院方确认本次具体安排。", btn("建立模板", "new-template", "", "primary", "plus"))}<div class="pet-grid">${state()
     .templates.map(
       (t) =>
-        `<section class="card pet-card"><span class="timeline-icon" style="width:42px;height:42px;margin-bottom:17px">${icon("clipboard")}</span><h2>${esc(t.name)}</h2><p class="subtle" style="margin:7px 0 15px">${esc(t.scene)} · ${t.count} 个结构化事项</p>${badge(t.status === "approved" ? "已审核模板" : "待临床审核", t.status === "approved" ? "green" : "amber")}<div style="margin-top:20px">${btn("查看模板", "template-detail", t.id, "full", "eye")}</div></section>`,
+        `<section class="card pet-card"><span class="timeline-icon" style="width:42px;height:42px;margin-bottom:17px">${icon("clipboard")}</span><h2>${esc(t.name)}</h2><p class="subtle" style="margin:7px 0 15px">${esc(t.scene)} · ${t.count} 个结构化事项</p>${badge(t.status === "approved" ? "已审核模板" : t.status === "returned" ? "待补充" : "待临床审核", t.status === "approved" ? "green" : "amber")}<div style="margin-top:20px">${btn("查看模板", "template-detail", t.id, "full", "eye")}${t.status === "returned" ? btn("修改并重提", "edit-template", t.id, "full soft", "edit") : t.status === "approved" ? btn("建立相似模板", "edit-template", t.id, "full soft", "plus") : ""}</div></section>`,
     )
     .join("")}</div>`;
 }
@@ -458,24 +476,30 @@ function billingPage() {
   const s = state(),
     valid = s.activations.filter((a) => a.status === "valid"),
     total = valid.reduce((x, a) => x + a.amount, 0),
-    paid = s.payments.reduce((x, p) => x + p.amount, 0);
+    paid =
+      s.payments.reduce((x, p) => x + p.amount, 0) -
+      s.refunds.reduce((x, r) => x + r.amount, 0);
   return `${head("用量与结算", "每一笔费用都能回到实际启用的服务。", btn("导出用量明细", "export-billing", "", "", "download"))}<section class="stats">${stat("有效启用", valid.length, "草稿和未启用服务不计费", "heart", "例")}${stat("用量金额", money(total), "按有效用量汇总", "wallet", "元")}${stat("已登记收款", money(paid), "有收款凭证可追溯", "check", "元", true)}${stat("待结算金额", money(total - paid), "等待核对与登记", "clock", "元")}</section><section class="card section-gap"><div class="card-head"><div><h2>${esc(s.clinic.name)}</h2><p>${esc(s.settings.plan)} · 每例 ¥${s.settings.unitPrice} · 同轮调整不重复收费</p></div>${total > paid ? btn("登记收款", "payment", "", "primary", "check") : badge("本期已结清")}</div><div class="table-wrap"><table class="data-table"><thead><tr><th>服务病例</th><th>启用时间</th><th>计费依据</th><th>金额</th><th>状态</th><th>操作</th></tr></thead><tbody>${s.activations
     .map((a) => {
       const p = petById(s, a.petId),
         settled = s.payments.some((x) => x.activationIds.includes(a.id));
-      return `<tr><td>${petCell(p)}</td><td>${fmt(a.at, true)}</td><td>正式发布 · 家庭接收 · 实际使用</td><td>¥${money(a.amount)}</td><td>${badge(a.status === "void" ? "已作废" : settled ? "已结算" : "有效启用", a.status === "void" ? "" : "green")}</td><td>${a.status === "valid" && !settled ? btn("作废条目", "void-activation", a.id, "small danger") : esc(a.reason || "—")}</td></tr>`;
+      return `<tr><td>${petCell(p)}</td><td>${fmt(a.at, true)}</td><td>正式发布 · 家庭接收 · 实际使用</td><td>¥${money(a.amount)}</td><td>${badge(a.status === "refunded" ? "已退款" : a.status === "void" ? "已作废" : settled ? "已结算" : "有效启用", a.status === "void" ? "" : "green")}</td><td>${a.status === "valid" && !settled ? btn("作废条目", "void-activation", a.id, "small danger") : a.status === "valid" && settled ? btn("登记退款", "refund-activation", a.id, "small danger") : esc(a.reason || "—")}</td></tr>`;
     })
     .join(
       "",
-    )}</tbody></table></div></section><section class="card pad"><h2 class="section-gap">收款记录</h2>${s.payments.length ? s.payments.map((p) => `<div class="metric-detail"><b>¥${money(p.amount)} · ${fmt(p.at, true)}</b><p>凭证：${esc(p.reference)}</p></div>`).join("") : empty("暂无收款登记", "完成线下对账后，可登记收款凭证。")}</section>`;
+    )}</tbody></table></div></section><section class="card pad"><h2 class="section-gap">收款记录</h2>${s.payments.length ? s.payments.map((p) => `<div class="metric-detail"><b>¥${money(p.amount)} · ${fmt(p.at, true)}</b><p>凭证：${esc(p.reference)}</p></div>`).join("") : empty("暂无收款登记", "完成线下对账后，可登记收款凭证。")}</section><section class="card pad" style="margin-top:22px"><h2 class="section-gap">退款记录</h2>${s.refunds.length ? s.refunds.map((r) => `<div class="metric-detail"><b>¥${money(r.amount)} · ${fmt(r.at, true)}</b><p>${esc(r.reason)}<br>退款凭证：${esc(r.reference)}</p></div>`).join("") : empty("暂无退款记录", "核对实际退款后，记录凭证与用量调整。")}</section>`;
 }
 function supportPage() {
-  return `${head("机构支持", "让使用中的问题，得到有记录的处理。", btn("登记支持事项", "ticket", "", "primary", "plus"))}<section class="card">${
+  const renewal = state().renewal;
+  const renewalCard = renewal
+    ? `<section class="card pad section-gap"><div class="field-action"><h2>${esc(state().clinic.name)} · 续订申请</h2>${badge(renewal.status === "completed" ? "续订已完成" : "待跟进", renewal.status === "completed" ? "green" : "amber")}</div><p class="subtle" style="margin:10px 0">申请时间 ${fmt(renewal.at, true)}${renewal.note ? " · " + esc(renewal.note) : ""}</p>${route().role === "ops" && renewal.status === "requested" ? btn("处理续订", "complete-renewal", "", "soft", "check") : ""}</section>`
+    : "";
+  return `${head("机构支持", "让使用中的问题，得到有记录的处理。", btn("登记支持事项", "ticket", "", "primary", "plus"))}${renewalCard}<section class="card">${
     state().tickets.length
       ? `<div class="table-wrap"><table class="data-table"><thead><tr><th>支持事项</th><th>登记人</th><th>时间</th><th>状态</th><th>操作</th></tr></thead><tbody>${state()
           .tickets.map(
             (t) =>
-              `<tr><td><b>${esc(t.title)}</b><p class="table-note">${esc(t.body)}</p></td><td>${esc(t.actor)}</td><td>${fmt(t.at, true)}</td><td>${badge(t.status === "open" ? "跟进中" : "已完成", t.status === "open" ? "amber" : "green")}</td><td>${t.status === "open" ? btn("完成处理", "close-ticket", t.id, "small soft", "check") : "—"}</td></tr>`,
+              `<tr><td><b>${esc(t.title)}</b><p class="table-note">${esc(t.body)}</p></td><td>${esc(t.actor)}</td><td>${fmt(t.at, true)}</td><td>${badge(t.status === "open" ? "跟进中" : "已完成", t.status === "open" ? "amber" : "green")}</td><td>${route().role === "ops" && t.status === "open" ? btn("完成处理", "close-ticket", t.id, "small soft", "check") : "—"}</td></tr>`,
           )
           .join("")}</tbody></table></div>`
       : empty("当前没有待处理支持事项", "机构使用中的问题与处理结果都会保留。")
@@ -486,7 +510,11 @@ function familyToday() {
     p = selectedPet(),
     plan = currentPlan(s, p.id),
     tasks = s.tasks.filter(
-      (t) => t.petId === p.id && !t.cancelled && t.date === day(),
+      (t) =>
+        p.status !== "ended" &&
+        t.petId === p.id &&
+        !t.cancelled &&
+        t.date === day(),
     ),
     events = s.events.filter((e) => e.petId === p.id),
     cs = s.concerns.filter((c) => c.petId === p.id && c.status !== "resolved");
@@ -501,38 +529,47 @@ function familyToday() {
       })
       .join("") ||
     empty("当前没有待执行事项", "本轮结束后可在资料中查看照护过程。")
-  }</section><section class="card section-gap" style="margin-top:20px"><div class="card-head"><h2>最近的照护记录</h2><a href="${href("family", "plan", p.id)}" class="text-btn">全部 ${icon("chevron")}</a></div><div style="padding:0 20px 20px">${eventTimeline(p.id)}</div></section></div><aside class="stack"><section class="card contact-card"><h3>遇到困难，我们一起处理。</h3><p style="font-size:12px">求助会带上当前安排和实际记录，<br>不用重新解释整段照护过程。</p>${p.status !== "ended" ? btn("联系医院协助", "new-concern", p.id, "full", "chat") : linkBtn("查看照护资料", href("family", "me", p.id), "full", "file")}<small>本院服务时间 ${esc(s.clinic.hours)}<br>需要尽快联系时，请拨打 ${esc(s.clinic.phone)}</small></section><section class="card"><div class="card-head"><h2>正在跟进</h2><span class="count-dot">${cs.length}</span></div>${cs.map((c) => `<button class="family-concern" style="width:100%;text-align:left" data-action="concern-detail" data-id="${c.id}"><div><h3>${esc(c.title)}</h3><p>${esc(c.assignee ? c.assignee + "正在跟进" : "等待医院接收")}</p>${cBadge(c)}</div>${icon("chevron")}</button>`).join("") || empty("目前没有未结问题", "新的求助与医院回复会在这里呈现。")}</section><section class="card pad"><h2 class="section-gap">下一次复查</h2>${appointmentCards(p.id)}${p.status !== "ended" ? btn("申请复查时间", "appointment", p.id, "soft full", "calendar") : ""}</section></aside></div>`;
+  }</section><section class="card section-gap" style="margin-top:20px"><div class="card-head"><h2>最近的照护记录</h2><a href="${href("family", "plan", p.id)}" class="text-btn">全部 ${icon("chevron")}</a></div><div style="padding:0 20px 20px">${eventTimeline(p.id)}</div></section></div><aside class="stack"><section class="card contact-card"><h3>遇到困难，我们一起处理。</h3><p style="font-size:12px">求助会带上当前安排和实际记录，<br>不用重新解释整段照护过程。</p>${p.status !== "ended" ? btn("联系医院协助", "new-concern", p.id, "full", "chat") : linkBtn("查看照护资料", href("family", "me", p.id), "full", "file")}<small>本院服务时间 ${esc(s.clinic.hours)}<br>需要尽快联系时，请拨打 ${esc(s.clinic.phone)}</small></section><section class="card"><div class="card-head"><h2>正在跟进</h2><span class="count-dot">${cs.length}</span></div>${cs.map((c) => `<button class="family-concern" style="width:100%;text-align:left" data-action="concern-detail" data-id="${c.id}"><div><h3>${esc(c.title)}</h3><p>${esc(c.assignee ? c.assignee + "正在跟进" : "等待医院接收")}</p>${cBadge(c)}</div>${icon("chevron")}</button>`).join("") || empty("目前没有未结问题", "新的求助与医院回复会在这里呈现。")}</section><section class="card pad"><h2 class="section-gap">下一次复查</h2>${appointmentCards(p.id, true)}${p.status !== "ended" ? btn("申请复查时间", "appointment", p.id, "soft full", "calendar") : ""}</section></aside></div>`;
 }
 function familyPlan() {
   const s = state(),
     p = selectedPet(),
     plan = currentPlan(s, p.id),
     plans = s.plans
-      .filter((pl) => pl.petId === p.id && pl.status === "published")
+      .filter(
+        (pl) =>
+          pl.petId === p.id && ["published", "withdrawn"].includes(pl.status),
+      )
       .slice()
       .reverse();
-  return `${head("一份清楚的照护安排", "始终查看当前有效安排，所有变化都有来源。", btn("导出照护资料", "export-pet", p.id, "", "download"))}<div class="family-grid"><div class="stack"><section class="card pad"><div class="field-action"><h2>当前安排</h2>${plan ? badge("医生已确认") : badge("待发布", "amber")}</div>${plan ? `<p class="subtle" style="margin:8px 0">${esc(plan.author)} · ${fmt(plan.effectiveAt, true)}生效</p>${instructionList(plan)}<div class="notice">${icon("file")}<div>来源：${esc(plan.source)}<br>${esc(plan.note)}</div></div>${btn("查看出院指导单", "source", plan.id, "full", "file")}` : empty("等待院方发布", "正式安排会在医院确认后出现。")}</section><section class="card pad"><h2 class="section-gap">实际执行记录</h2>${eventTimeline(p.id)}</section></div><aside class="stack"><section class="card pad"><h2 class="section-gap">安排变化</h2><div class="timeline">${plans.map((pl) => `<div class="timeline-item"><span class="timeline-icon">${icon("clipboard")}</span><div><h3>${esc(pl.reason)}</h3><p>${esc(pl.author)} · ${fmt(pl.effectiveAt, true)}生效</p>${badge(plan?.id === pl.id ? "当前有效" : pl.effectiveAt > new Date().toISOString() ? "即将生效" : "此前安排", plan?.id === pl.id ? "green" : "")}<button class="text-btn" style="display:block" data-action="view-plan" data-id="${pl.id}">查看${pl.previousId ? "变化" : "详情"} ${icon("chevron")}</button></div></div>`).join("") || empty("暂无安排")}</div></section><section class="card pad"><h2>照护分工</h2><p class="subtle" style="margin:10px 0">当前照护人：${esc(p.member)}</p>${linkBtn("管理家人交接", href("family", "me", p.id), "full", "users")}</section></aside></div>`;
+  return `${head("一份清楚的照护安排", "始终查看当前有效安排，所有变化都有来源。", btn("导出照护资料", "export-pet", p.id, "", "download"))}<div class="family-grid"><div class="stack"><section class="card pad"><div class="field-action"><h2>当前安排</h2>${plan ? badge("医生已确认") : badge("待发布", "amber")}</div>${futurePlanNotice(p.id)}${plan ? `<p class="subtle" style="margin:8px 0">${esc(plan.author)} · ${fmt(plan.effectiveAt, true)}生效</p>${instructionList(plan)}<div class="notice">${icon("file")}<div>来源：${esc(plan.source)}<br>${esc(plan.note)}</div></div>${btn("查看出院指导单", "source", plan.id, "full", "file")}` : empty("等待院方发布", "正式安排会在医院确认后出现。")}</section><section class="card pad"><h2 class="section-gap">实际执行记录</h2>${eventTimeline(p.id)}</section></div><aside class="stack"><section class="card pad"><h2 class="section-gap">安排变化</h2><div class="timeline">${plans.map((pl) => `<div class="timeline-item"><span class="timeline-icon">${icon("clipboard")}</span><div><h3>${esc(pl.reason)}</h3><p>${esc(pl.author)} · ${fmt(pl.effectiveAt, true)}生效</p>${badge(pl.status === "withdrawn" ? "已撤销" : plan?.id === pl.id ? "当前有效" : pl.effectiveAt > new Date().toISOString() ? "即将生效" : "此前安排", plan?.id === pl.id ? "green" : "")}<button class="text-btn" style="display:block" data-action="view-plan" data-id="${pl.id}">查看${pl.previousId ? "变化" : "详情"} ${icon("chevron")}</button></div></div>`).join("") || empty("暂无安排")}</div></section><section class="card pad"><h2>照护分工</h2><p class="subtle" style="margin:10px 0">当前照护人：${esc(p.member)}</p>${linkBtn("管理家人交接", href("family", "me", p.id), "full", "users")}</section></aside></div>`;
 }
 function familyMessages() {
   const p = selectedPet(),
     cs = state().concerns.filter((c) => c.petId === p.id);
-  return `${head("每一份求助，都有后续", "医院回复、补充信息与后续动作，在这里连续跟进。", p.status !== "ended" ? btn("发起求助", "new-concern", p.id, "primary", "plus") : "")}<section class="card">${cs.map((c) => `<button class="family-concern" style="width:100%;text-align:left;padding:22px" data-action="concern-detail" data-id="${c.id}"><span class="timeline-icon">${icon(c.status === "resolved" ? "check" : "chat")}</span><div><h3>${esc(c.title)}</h3><p>${esc(c.messages.at(-1)?.text || c.body)}</p><p>${esc(c.assignee || "等待医院接收")} · ${fmt(c.createdAt, true)}</p></div>${cBadge(c)}${icon("chevron")}</button>`).join("") || empty("还没有消息", "发起求助后，可在这里查看医院接手和答复情况。")}</section>`;
+  return `${head("每一份求助，都有后续", "医院回复、补充信息与后续动作，在这里连续跟进。", p.status === "active" ? btn("发起求助", "new-concern", p.id, "primary", "plus") : "")}<section class="card">${cs.map((c) => `<button class="family-concern" style="width:100%;text-align:left;padding:22px" data-action="concern-detail" data-id="${c.id}"><span class="timeline-icon">${icon(c.status === "resolved" ? "check" : "chat")}</span><div><h3>${esc(c.title)}</h3><p>${esc(c.messages.at(-1)?.text || c.body)}</p><p>${esc(c.assignee || "等待医院接收")} · ${fmt(c.createdAt, true)}</p></div>${cBadge(c)}${icon("chevron")}</button>`).join("") || empty("还没有消息", "发起求助后，可在这里查看医院接手和答复情况。")}</section>`;
 }
 function familyMe() {
   const p = selectedPet(),
     s = state();
-  return `${head("一起照护，安心交接", "家人分工、复查和本轮资料都在这里。")}<div class="family-grid"><div class="stack"><section class="card pad"><div class="field-action"><h2>照护成员</h2>${btn("邀请家人", "invite", p.id, "small soft", "plus")}</div><div class="notice">${icon("users")}当前照护人：${esc(p.member)}</div><div class="member-grid">${p.members
-    .filter((m) => m.active)
+  return `${head("一起照护，安心交接", "家人分工、复查和本轮资料都在这里。")}<div class="family-grid"><div class="stack"><section class="card pad"><div class="field-action"><h2>照护成员</h2>${actor() === p.owner ? btn("邀请家人", "invite", p.id, "small soft", "plus") : badge("授权照护成员", "")}</div><div class="notice">${icon("users")}当前照护人：${esc(p.member)}</div><div class="member-grid">${p.members
+    .filter((m) => m.active && (!m.expires || m.expires >= day()))
     .map(
       (m) =>
-        `<section class="card member-card"><span class="avatar">${esc(m.name.slice(-2))}</span><h3>${esc(m.name)}</h3><p>${m.role}${p.member === m.name ? " · 当前照护人" : ""}${m.expires ? " · 授权至" + fmt(m.expires) : ""}</p><div class="actions">${m.name !== actor() ? btn("以此成员查看", "switch-member", m.name, "small", "eye") : badge("当前身份")}${m.role !== "主人" ? btn("撤销授权", "revoke", m.id, "small danger") : ""}</div></section>`,
+        `<section class="card member-card"><span class="avatar">${esc(m.name.slice(-2))}</span><h3>${esc(m.name)}</h3><p>${m.role}${p.member === m.name ? " · 当前照护人" : ""}${m.expires ? " · 授权至" + fmt(m.expires) : ""}</p><div class="actions">${m.name !== actor() ? btn("以此成员查看", "switch-member", m.name, "small", "eye") : badge("当前身份")}${m.role !== "主人" && actor() === p.owner ? btn("撤销授权", "revoke", m.id, "small danger") : ""}</div></section>`,
     )
     .join(
       "",
-    )}</div><div style="margin-top:18px">${btn("发起照护交接", "handoff", p.id, "full", "users")}</div>${p.handoff?.status === "pending" ? `<div class="notice amber">${icon("clock")}<div>${esc(p.handoff.from)} → ${esc(p.handoff.to)}<br>等待接班确认${actor() === p.handoff.to ? btn("确认接班", "accept-handoff", p.id, "small soft") : ""}</div></div>` : ""}</section><section class="card pad"><h2 class="section-gap">本轮照护资料</h2><dl class="info-list"><div><dt>宠物</dt><dd>${esc(p.name)} · ${esc(p.breed)}</dd></div><div><dt>照护场景</dt><dd>${esc(p.scene)}</dd></div><div><dt>本轮开始</dt><dd>${fmt(p.start)}</dd></div><div><dt>服务状态</dt><dd>${pBadge(p)}</dd></div></dl>${p.status === "ended" ? `<div class="notice">${icon("check")}<div>${esc(p.endReason)}</div></div>` : '<div class="divider"></div>'}${btn("下载照护资料包", "export-pet", p.id, "full", "download")}</section></div><aside class="stack"><section class="card pad"><h2 class="section-gap">复查安排</h2>${appointmentCards(p.id)}${p.status !== "ended" ? btn("申请复查", "appointment", p.id, "soft full", "calendar") : ""}</section><section class="card contact-card"><h3>${esc(s.clinic.name)}</h3><p style="font-size:12px">随访负责人：${esc(s.clinic.contact)}<br>服务时间：${esc(s.clinic.hours)}</p><a class="btn full" href="tel:${s.clinic.phone.replace(/[^\d+]/g, "")}">${icon("phone")}拨打医院电话</a></section></aside></div>`;
+    )}</div><div style="margin-top:18px">${p.status !== "ended" ? btn("发起照护交接", "handoff", p.id, "full", "users") : badge("本轮已交付资料", "")}</div>${p.handoff?.status === "pending" ? `<div class="notice amber">${icon("clock")}<div>${esc(p.handoff.from)} → ${esc(p.handoff.to)}<br>等待接班确认${actor() === p.handoff.to ? btn("确认接班", "accept-handoff", p.id, "small soft") : ""}</div></div>` : ""}</section><section class="card pad"><h2 class="section-gap">本轮照护资料</h2>${p.previousServiceId ? `<a class="text-btn" href="${href("family", "me", p.previousServiceId)}">${icon("file")}查看上一轮照护资料</a>` : ""}<dl class="info-list"><div><dt>宠物</dt><dd>${esc(p.name)} · ${esc(p.breed)}</dd></div><div><dt>照护场景</dt><dd>${esc(p.scene)}</dd></div><div><dt>本轮开始</dt><dd>${fmt(p.start)}</dd></div><div><dt>服务状态</dt><dd>${pBadge(p)}</dd></div></dl>${p.status === "ended" ? `<div class="notice">${icon("check")}<div>${esc(p.endReason)}</div></div>` : '<div class="divider"></div>'}${btn("下载照护资料包", "export-pet", p.id, "full", "download")}</section></div><aside class="stack"><section class="card pad"><h2 class="section-gap">复查安排</h2>${appointmentCards(p.id)}${p.status !== "ended" ? btn("申请复查", "appointment", p.id, "soft full", "calendar") : ""}</section><section class="card contact-card"><h3>${esc(s.clinic.name)}</h3><p style="font-size:12px">随访负责人：${esc(s.clinic.contact)}<br>服务时间：${esc(s.clinic.hours)}</p><a class="btn full" href="tel:${s.clinic.phone.replace(/[^\d+]/g, "")}">${icon("phone")}拨打医院电话</a></section></aside></div>`;
 }
 function render() {
   const r = route();
+  const previousScroll =
+    document.querySelector(".family-content")?.scrollTop || 0;
+  const sameRoute = render.lastRoute === location.hash;
+  render.lastRoute = location.hash;
+  document.body.classList.toggle("family-mode", r.role === "family");
+  if (r.role === "family") sessionStorage.setItem("qiyu.pet", selectedPet().id);
   document.title = `${roles[r.role].name} · 栖愈`;
   let content;
   if (r.role === "family") {
@@ -544,6 +581,8 @@ function render() {
         me: familyMe,
       }[r.page]?.() || familyToday();
     app.innerHTML = familyShell(content);
+    if (sameRoute)
+      document.querySelector(".family-content").scrollTop = previousScroll;
   } else {
     content =
       {
@@ -618,7 +657,12 @@ function modal(title, subtitle, body, submit = null, wide = false) {
 function closeDialog() {
   if (dialog.open) dialog.close();
   modalSubmit = null;
-  returnFocus?.focus?.();
+  if (returnFocus?.isConnected) returnFocus.focus({ preventScroll: true });
+  else {
+    const main = document.querySelector("main");
+    main?.setAttribute("tabindex", "-1");
+    main?.focus({ preventScroll: true });
+  }
 }
 function confirmAction(title, description, action, button = "确认") {
   modal(
@@ -693,11 +737,19 @@ function openNewPlan() {
           .templates.filter((t) => t.status === "approved")
           .map((t) => [t.id, t.name]),
       ],
-    )}${textarea("家庭指导补充", "note", "")}<div><div class="editor-top"><h3>照护事项</h3><small>逐项核对本次正式材料</small></div>${planEditors(items)}</div>`,
+    )}${sourceUpload()}${textarea("家庭指导补充", "note", "")}<div><div class="editor-top"><h3>照护事项</h3><small>逐项核对本次正式材料</small></div>${planEditors(items)}</div>`,
     {
       label: "保存出院草稿",
-      handler: (data) => {
-        const result = run({ type: "createPlan", ...data, items: readItems() });
+      handler: async (data, form) => {
+        const sourceDocument = await documentFile(
+          form.elements.sourceFile?.files[0],
+        );
+        const result = run({
+          type: "createPlan",
+          ...data,
+          sourceDocument,
+          items: readItems(),
+        });
         if (result) go("clinic", "case", result.entity);
       },
     },
@@ -718,12 +770,15 @@ function openEditPlan(id) {
   modal(
     "完善出院草稿",
     `${p.name} · ${p.owner}`,
-    `${pl.returnReason ? `<div class="notice amber">${icon("chat")}退回原因：${esc(pl.returnReason)}</div>` : ""}${field("材料来源", "source", pl.source, "text", true)}${textarea("家庭指导补充", "note", pl.note)}${planEditors(pl.items)}`,
+    `${pl.returnReason ? `<div class="notice amber">${icon("chat")}退回原因：${esc(pl.returnReason)}</div>` : ""}${field("材料来源", "source", pl.source, "text", true)}${sourceUpload(pl.sourceDocument)}${textarea("家庭指导补充", "note", pl.note)}${planEditors(pl.items)}<button type="button" class="btn" data-action="save-plan-draft" data-id="${pl.id}">保存草稿，稍后提交</button>`,
     {
       label: "保存并提交审核",
-      handler: (data) => {
+      handler: async (data, form) => {
+        const sourceDocument = await documentFile(
+          form.elements.sourceFile?.files[0],
+        );
         const result = run(
-          { type: "savePlan", id, ...data, items: readItems() },
+          { type: "savePlan", id, ...data, sourceDocument, items: readItems() },
           false,
         );
         if (result) run({ type: "submitPlan", id });
@@ -762,13 +817,14 @@ function openRevision(petId) {
         ["now", "发布后立即生效"],
         ["scheduled", "指定生效时间"],
       ],
-    )}<label class="field" id="effective-field" hidden>生效时间<input name="effectiveTime" type="datetime-local"></label>${textarea("家庭指导补充", "note", pl.note)}${planEditors(pl.items)}<label class="checkbox"><input type="checkbox" required>已核对修改内容与生效时间，确认交付家庭。</label>`,
+    )}<label class="field" id="effective-field" hidden>生效时间（医院当地时间）<input name="effectiveTime" type="datetime-local"></label>${textarea("家庭指导补充", "note", pl.note)}${planEditors(pl.items)}<label class="checkbox"><input type="checkbox" required>已核对修改内容与生效时间，确认交付家庭。</label>`,
     {
       label: "发布调整后的安排",
       handler: (data) => {
         if (
           data.effectiveMode === "scheduled" &&
-          (!data.effectiveTime || Date.parse(data.effectiveTime) <= Date.now())
+          (!data.effectiveTime ||
+            Date.parse(data.effectiveTime + ":00+08:00") <= Date.now())
         ) {
           dialog.querySelector(".form-error").textContent =
             "请选择未来的生效时间。";
@@ -783,7 +839,7 @@ function openRevision(petId) {
           items: readItems(),
           effectiveAt:
             data.effectiveMode === "scheduled"
-              ? new Date(data.effectiveTime).toISOString()
+              ? new Date(data.effectiveTime + ":00+08:00").toISOString()
               : new Date().toISOString(),
         });
       },
@@ -805,7 +861,7 @@ async function imageFile(file) {
     r.readAsDataURL(file);
   });
 }
-function openTask(id) {
+function openTask(id, addRecord = false) {
   const s = state(),
     t = s.tasks.find((t) => t.id === id);
   if (!t) {
@@ -814,6 +870,15 @@ function openTask(id) {
   }
   const p = petById(s, t.petId),
     ev = s.events.filter((e) => e.taskId === id);
+  if (ev.length && !addRecord) {
+    modal(
+      t.title,
+      `${p.name} · ${t.date} ${t.time}`,
+      `<div class="notice">${icon("clipboard")}${esc(t.detail)}</div><div class="timeline">${ev.map((e) => `<div class="timeline-item"><span class="timeline-icon">${icon(e.result === "done" ? "check" : "chat")}</span><div><h3>${esc(resultLabels[e.result])}${e.corrects ? " · 更正记录" : ""}</h3><p>${esc(e.note || "已如实记录")}</p><time>${esc(e.actor)} · ${fmt(e.occurredAt, true)}</time>${e.attachment ? `<img class="message-image" src="${safeImage(e.attachment)}" alt="照护照片">` : ""}${e.actor === actor() ? btn("更正这条记录", "correct", e.id, "small", "edit") : ""}</div></div>`).join("")}</div>${p.status !== "ended" ? `<div class="actions" style="margin-top:20px">${btn("针对这次照护求助", "task-concern", t.id, "primary", "chat")}${btn("追加实际执行记录", "add-task-record", t.id, "", "plus")}</div>` : ""}`,
+    );
+    return;
+  }
+  const operationId = uid("operation");
   modal(
     t.title,
     `${p.name} · ${t.time} · 当前照护人 ${p.member}`,
@@ -829,7 +894,7 @@ function openTask(id) {
             )
             .join(
               "",
-            )}</div>${textarea("补充说明", "note", "", "", "记录实际情况，不确定的地方也可以说明")}<label class="field">补充照片（可选）<input type="file" name="attachment" accept="image/png,image/jpeg,image/webp,image/gif"><small>选择清晰的照护照片，单张不超过 500KB。</small></label><label class="checkbox"><input type="checkbox" name="help">这次需要医院协助，请一并提交求助</label>`
+            )}</div>${textarea("补充说明", "note", "", "", "记录实际情况，不确定的地方也可以说明")}<label class="field">补充照片（可选）<input type="file" name="attachment" accept="image/png,image/jpeg,image/webp,image/gif"><small>选择清晰的照护照片，单张不超过 500KB。</small></label>${field("实际发生时间（医院当地时间）", "occurredAt", new Intl.DateTimeFormat("sv-SE", { timeZone: "Asia/Shanghai", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false }).format(new Date()).replace(" ", "T"), "datetime-local", true)}<label class="checkbox"><input type="checkbox" name="help">这次需要医院协助，请一并提交求助</label>`
     }`,
     p.status === "ended"
       ? null
@@ -848,7 +913,10 @@ function openTask(id) {
                 note: data.note,
                 help: !!data.help,
                 attachment,
-                operationId: uid("operation"),
+                operationId,
+                occurredAt: new Date(
+                  data.occurredAt + ":00+08:00",
+                ).toISOString(),
               });
             } catch (e) {
               dialog.querySelector(".form-error").textContent = e.message;
@@ -859,10 +927,11 @@ function openTask(id) {
 }
 function openConcern(petId, taskId = null) {
   const p = petById(state(), petId) || selectedPet();
+  const related = state().tasks.find((t) => t.id === taskId);
   modal(
     "联系医院协助",
     `${p.name} · ${state().clinic.name}`,
-    `<div class="notice">${icon("clock")}<div>服务时间 ${esc(state().clinic.hours)}<br>需尽快联系时，请拨打 ${esc(state().clinic.phone)}</div></div>${select(
+    `${related ? `<div class="notice">${icon("clipboard")}关联照护：${esc(related.title)} · ${related.time}</div>` : ""}<div class="notice">${icon("clock")}<div>服务时间 ${esc(state().clinic.hours)}<br>需尽快联系时，请拨打 ${esc(state().clinic.phone)}</div></div>${select(
       "需要协助的类型",
       "category",
       [
@@ -892,7 +961,7 @@ function concernDetail(id) {
   modal(
     c.title,
     `${p.name} · ${esc(c.category)} · ${fmt(c.createdAt, true)}`,
-    `<div class="field-action">${cBadge(c)}<span class="subtle">${esc(c.assignee ? "责任人：" + c.assignee : "等待医院接手")}</span></div>${task ? `<div class="notice">${icon("clipboard")}<div>关联事项：${esc(task.title)} · ${task.time}<br>${esc(task.detail)}</div></div>` : ""}<div class="message-list">${c.messages.map((m) => `<div class="message ${m.role !== "family" ? "professional" : ""}"><span class="avatar ${m.role !== "family" ? "staff" : ""}">${esc(m.actor.slice(-2))}</span><div class="message-body"><div class="message-meta"><b>${esc(m.actor)}</b><time>${fmt(m.at, true)}</time>${m.role === "doctor" ? "<span>兽医答复</span>" : ""}</div><div class="message-text">${esc(m.text)}</div></div></div>`).join("")}</div>${c.nextAction ? `<div class="notice">${icon("arrow")}<div><b>下一步</b><br>${esc(c.nextAction)}</div></div>` : ""}<div class="actions" style="margin-top:20px">${r.role !== "family" && c.status === "new" ? btn("接手此问题", "claim", id, "primary", "check") : ""}${r.role === "clinic" && ["accepted", "supplement"].includes(c.status) && c.category !== "预约与资料" ? btn("转交主治医生", "escalate", id, "primary", "stethoscope") : ""}${r.role !== "family" && !["new", "resolved"].includes(c.status) ? btn("请求家庭补充", "request-supplement", id, "", "chat") : ""}${["answered", "action"].includes(c.status) ? btn("确认已解决", "resolve", id, "soft", "check") : ""}${c.status === "resolved" ? btn("需要继续跟进", "reopen", id, "", "chat") : ""}</div>${c.status !== "resolved" && canReply && (r.role === "family" || c.status !== "new") ? `<div class="divider"></div><form class="form" data-form="concern-reply" data-id="${id}">${textarea(r.role === "family" ? "补充信息" : "交付答复", "text", "", true, r.role === "family" ? "补充实际情况" : "说明判断与处理结果")}${r.role !== "family" ? textarea("明确的下一步", "nextAction", "", true, "说明后续行动、由谁执行及联系安排") : ""}<div class="form-error" role="alert"></div><div class="actions"><button class="btn primary" type="submit">${icon("chat")}${r.role === "family" ? "发送补充" : "交付答复与后续安排"}</button></div></form>` : ""}`,
+    `<div class="field-action">${cBadge(c)}<span class="subtle">${esc(c.assignee ? "责任人：" + c.assignee : "等待医院接手")}</span></div>${task ? `<div class="notice">${icon("clipboard")}<div>关联事项：${esc(task.title)} · ${task.time}<br>${esc(task.detail)}</div></div>` : ""}<div class="message-list">${c.messages.map((m) => `<div class="message ${m.role !== "family" ? "professional" : ""}"><span class="avatar ${m.role !== "family" ? "staff" : ""}">${esc(m.actor.slice(-2))}</span><div class="message-body"><div class="message-meta"><b>${esc(m.actor)}</b><time>${fmt(m.at, true)}</time>${m.role === "doctor" ? "<span>兽医答复</span>" : ""}</div><div class="message-text">${esc(m.text)}</div></div></div>`).join("")}</div>${c.nextAction ? `<div class="notice">${icon("arrow")}<div><b>下一步</b><br>${esc(c.nextAction)}</div></div>` : ""}<div class="actions" style="margin-top:20px">${r.role !== "family" && c.status === "new" ? btn("接手此问题", "claim", id, "primary", "check") : ""}${r.role === "clinic" && ["accepted", "supplement"].includes(c.status) && c.category !== "预约与资料" ? btn("转交主治医生", "escalate", id, "primary", "stethoscope") : ""}${r.role !== "family" && !["new", "resolved"].includes(c.status) ? btn("请求家庭补充", "request-supplement", id, "", "chat") : ""}${r.role === "family" && c.status === "answered" ? btn("已收到，开始落实", "ack-action", id, "primary", "check") : ""}${r.role !== "family" && c.status !== "resolved" ? btn("交接负责人", "reassign", id, "", "users") : ""}${["answered", "action"].includes(c.status) ? btn("确认已解决", "resolve", id, "soft", "check") : ""}${c.status === "resolved" ? btn("需要继续跟进", "reopen", id, "", "chat") : ""}</div>${c.status !== "resolved" && canReply && (r.role === "family" || c.status !== "new") ? `<div class="divider"></div><form class="form" data-form="concern-reply" data-id="${id}">${textarea(r.role === "family" ? "补充信息" : "交付答复", "text", "", true, r.role === "family" ? "补充实际情况" : "说明判断与处理结果")}${r.role !== "family" ? textarea("明确的下一步", "nextAction", "", true, "说明后续行动、由谁执行及联系安排") : ""}<div class="form-error" role="alert"></div><div class="actions"><button class="btn primary" type="submit">${icon("chat")}${r.role === "family" ? "发送补充" : "交付答复与后续安排"}</button></div></form>` : ""}`,
     null,
     true,
   );
@@ -904,7 +973,7 @@ function sourceModal(id) {
   modal(
     "出院指导单",
     `${esc(pl.source)} · ${esc(pl.author)}`,
-    `<article class="doc-paper"><h2>${esc(s.clinic.name)}<br>家庭照护指导单</h2><dl class="info-list"><div><dt>宠物</dt><dd>${esc(p.name)} · ${esc(p.breed)}</dd></div><div><dt>主人</dt><dd>${esc(p.owner)}</dd></div><div><dt>照护场景</dt><dd>${esc(p.scene)}</dd></div><div><dt>交付人</dt><dd>${esc(pl.author)}</dd></div></dl>${instructionList(pl)}<p>${esc(pl.note)}</p><p>服务时间：${esc(s.clinic.hours)}<br>本院联系：${esc(s.clinic.phone)}</p></article><div class="actions" style="margin-top:18px">${btn("下载本轮资料", "export-pet", p.id, "primary", "download")}</div>`,
+    `${pl.sourceDocument ? `<div class="metric-detail"><b>原始出院材料</b><p>${esc(pl.sourceDocument.name)}</p>${pl.sourceDocument.type.startsWith("image/") ? `<img class="source-image" src="${safeImage(pl.sourceDocument.data)}" alt="原始出院材料">` : ""}${btn("下载原始材料", "download-source", pl.id, "small", "download")}</div>` : ""}<article class="doc-paper"><h2>${esc(s.clinic.name)}<br>家庭照护指导单</h2><dl class="info-list"><div><dt>宠物</dt><dd>${esc(p.name)} · ${esc(p.breed)}</dd></div><div><dt>主人</dt><dd>${esc(p.owner)}</dd></div><div><dt>照护场景</dt><dd>${esc(p.scene)}</dd></div><div><dt>交付人</dt><dd>${esc(pl.author)}</dd></div></dl>${instructionList(pl)}<p>${esc(pl.note)}</p><p>服务时间：${esc(s.clinic.hours)}<br>本院联系：${esc(s.clinic.phone)}</p></article><div class="actions" style="margin-top:18px">${btn("下载本轮资料", "export-pet", p.id, "primary", "download")}</div>`,
     null,
     true,
   );
@@ -919,10 +988,13 @@ function viewPlan(id) {
         return !before || JSON.stringify(before) !== JSON.stringify(i);
       })
     : [];
+  const removed = old
+    ? old.items.filter((i) => !pl.items.some((x) => x.id === i.id))
+    : [];
   modal(
     pl.previousId ? "照护安排变化" : "照护安排详情",
     `${fmt(pl.effectiveAt, true)}生效 · ${esc(pl.author)}`,
-    `${old ? `<div class="notice">${icon("edit")}<div><b>${esc(pl.reason)}</b><br>${changes.length ? changes.map((i) => esc(i.title) + "的安排已调整").join("<br>") : "医院已更新补充指导，请查看当前安排。"}</div></div>` : ""}${instructionList(pl)}<p class="subtle">${esc(pl.note)}</p>`,
+    `${old ? `<div class="notice">${icon("edit")}<div><b>${esc(pl.reason)}</b><br>${changes.length ? changes.map((i) => esc(i.title) + "的安排已调整").join("<br>") : "医院已更新补充指导，请查看当前安排。"}</div></div>` : ""}${removed.length ? `<div class="notice amber">${icon("clipboard")}已取消：${removed.map((i) => esc(i.title)).join("、")}</div>` : ""}${instructionList(pl)}<p class="subtle">${esc(pl.note)}</p>`,
     null,
     true,
   );
@@ -974,7 +1046,7 @@ function inviteModal(petId) {
 function handoffModal(petId) {
   const s = state(),
     p = petById(s, petId),
-    members = p.members.filter((m) => m.active && m.name !== p.member);
+    members = activeMembers(p).filter((m) => m.name !== p.member);
   if (!members.length) {
     toast("请先邀请另一位照护成员");
     inviteModal(petId);
@@ -1013,7 +1085,7 @@ function exportPet(petId) {
     ),
     events = s.events.filter((e) => e.petId === petId),
     cs = s.concerns.filter((c) => c.petId === petId);
-  const html = `<!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>${esc(p.name)}的照护资料 · 栖愈</title><style>body{font-family:system-ui,sans-serif;color:#233c35;max-width:800px;margin:40px auto;padding:24px;line-height:1.8}h1{font-size:26px}h2{font-size:20px;margin-top:30px}section{border-bottom:1px solid #dfe5da;padding:16px 0}p{white-space:pre-wrap}small{color:#68776f}img{max-width:260px}dt{color:#68776f}dd{margin-left:0}</style><h1>${esc(p.name)}的本轮照护资料</h1><p>${esc(s.clinic.name)} · ${esc(p.scene)}<br>主人：${esc(p.owner)}<br>资料截至：${fmt(new Date().toISOString(), true)}</p><h2>正式照护安排</h2>${plans.map((pl) => `<section><h3>${esc(pl.reason)}</h3><p>确认人：${esc(pl.author)}<br>来源：${esc(pl.source)}<br>生效：${fmt(pl.effectiveAt, true)}</p>${pl.items.map((i) => `<p><b>${esc(i.time)} ${esc(i.title)}</b><br>${esc(i.detail)}</p>`).join("")}<p>${esc(pl.note)}</p></section>`).join("")}<h2>家庭自报执行记录</h2>${events.map((e) => `<section><b>${esc(s.tasks.find((t) => t.id === e.taskId)?.title || "照护事项")} · ${esc(resultLabels[e.result])}</b><p>${esc(e.note)}</p><small>记录人：${esc(e.actor)} · 实际发生：${fmt(e.occurredAt, true)}${e.corrects ? " · 更正记录" : ""}</small></section>`).join("") || "<p>暂无记录</p>"}<h2>问题与医院答复</h2>${cs.map((c) => `<section><h3>${esc(c.title)} · ${esc(concernLabels[c.status])}</h3>${c.messages.map((m) => `<p><b>${esc(m.actor)}</b> · ${fmt(m.at, true)}<br>${esc(m.text)}</p>`).join("")}<p>下一步：${esc(c.nextAction || "待明确")}</p></section>`).join("") || "<p>暂无问题</p>"}<h2>复查与服务交付</h2>${s.appointments
+  const html = `<!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>${esc(p.name)}的照护资料 · 栖愈</title><style>body{font-family:system-ui,sans-serif;color:#233c35;max-width:800px;margin:40px auto;padding:24px;line-height:1.8}h1{font-size:26px}h2{font-size:20px;margin-top:30px}section{border-bottom:1px solid #dfe5da;padding:16px 0}p{white-space:pre-wrap}small{color:#68776f}img{max-width:260px}dt{color:#68776f}dd{margin-left:0}</style><h1>${esc(p.name)}的本轮照护资料</h1><p>${esc(s.clinic.name)} · ${esc(p.scene)}<br>主人：${esc(p.owner)}<br>资料截至：${fmt(new Date().toISOString(), true)}</p><h2>正式照护安排</h2>${plans.map((pl) => `<section><h3>${esc(pl.reason)}</h3><p>确认人：${esc(pl.author)}<br>来源：${esc(pl.source)}<br>生效：${fmt(pl.effectiveAt, true)}</p>${pl.items.map((i) => `<p><b>${esc(i.time)} ${esc(i.title)}</b><br>${esc(i.detail)}</p>`).join("")}<p>${esc(pl.note)}</p>${pl.sourceDocument && /^data:(application\/pdf|image\/(png|jpeg|webp));base64,/.test(pl.sourceDocument.data) ? `<p><a href="${esc(pl.sourceDocument.data)}" download="${esc(pl.sourceDocument.name)}">下载原始材料：${esc(pl.sourceDocument.name)}</a></p>` : ""}</section>`).join("")}<h2>家庭自报执行记录</h2>${events.map((e) => `<section><b>${esc(s.tasks.find((t) => t.id === e.taskId)?.title || "照护事项")} · ${esc(resultLabels[e.result])}</b><p>${esc(e.note)}</p><small>记录人：${esc(e.actor)} · 实际发生：${fmt(e.occurredAt, true)}${e.corrects ? " · 更正记录" : ""}</small>${e.attachment ? `<p><img src="${safeImage(e.attachment)}" alt="照护记录附件"></p>` : ""}</section>`).join("") || "<p>暂无记录</p>"}<h2>问题与医院答复</h2>${cs.map((c) => `<section><h3>${esc(c.title)} · ${esc(concernLabels[c.status])}</h3>${c.messages.map((m) => `<p><b>${esc(m.actor)}</b> · ${fmt(m.at, true)}<br>${esc(m.text)}</p>`).join("")}<p>下一步：${esc(c.nextAction || "待明确")}</p></section>`).join("") || "<p>暂无问题</p>"}<h2>复查与服务交付</h2>${s.appointments
     .filter((a) => a.petId === petId)
     .map(
       (a) =>
@@ -1066,7 +1138,11 @@ function searchResults(q) {
   const pets = s.pets.filter((p) =>
       `${p.name}${p.owner}${p.breed}`.includes(q),
     ),
-    cs = s.concerns.filter((c) => c.title.includes(q));
+    cs = s.concerns.filter(
+      (c) =>
+        (r.role !== "family" || c.petId === selectedPet().id) &&
+        c.title.includes(q),
+    );
   return (
     pets
       .map(
@@ -1086,14 +1162,250 @@ function searchResults(q) {
 function formData(form) {
   return Object.fromEntries(new FormData(form).entries());
 }
+function futurePlanNotice(petId) {
+  const future = state().plans.find(
+    (pl) =>
+      pl.petId === petId &&
+      pl.status === "published" &&
+      pl.effectiveAt > new Date().toISOString(),
+  );
+  return future
+    ? `<div class="notice amber">${icon("clock")}<div>新的安排将于${fmt(future.effectiveAt, true)}生效，当前安排继续有效。<br>${btn("查看待生效安排", "view-plan", future.id, "small", "clipboard")}${route().role === "doctor" ? btn("撤销待生效安排", "withdraw-plan", future.id, "small danger", "close") : ""}</div></div>`
+    : "";
+}
+function openNewRound(id) {
+  const p = petById(state(), id),
+    plan = currentPlan(state(), id);
+  openNewPlan();
+  dialog.querySelector("#dialog-title").textContent = "建立新一轮照护";
+  dialog.querySelector(".dialog-head p").textContent =
+    `${p.name} · 上一轮资料保留，新一轮重新审核交付`;
+  const form = dialog.querySelector("form");
+  for (const key of [
+    "name",
+    "owner",
+    "species",
+    "breed",
+    "age",
+    "weight",
+    "phone",
+    "scene",
+  ])
+    if (form.elements[key]) form.elements[key].value = p[key] || "";
+  const hidden = document.createElement("input");
+  hidden.type = "hidden";
+  hidden.name = "previousServiceId";
+  hidden.value = id;
+  form.append(hidden);
+  if (plan) {
+    form.elements.source.value = plan.source;
+    form.elements.note.value = plan.note;
+    dialog.querySelector("#plan-items").innerHTML = plan.items
+      .map((i, n) => editorItem({ ...i, id: uid("instruction") }, n))
+      .join("");
+  }
+}
+function sourceUpload(doc) {
+  return `<label class="field">原始出院材料（可选）<input type="file" name="sourceFile" accept="application/pdf,image/png,image/jpeg,image/webp"><small>${doc ? "已保存：" + esc(doc.name) + "；选择新材料可替换。" : "支持 PDF 或清晰图片，单份不超过 1MB。"}</small></label>`;
+}
+async function documentFile(file) {
+  if (!file?.size) return null;
+  if (
+    !["application/pdf", "image/png", "image/jpeg", "image/webp"].includes(
+      file.type,
+    )
+  )
+    throw new Error("请选择 PDF、JPG、PNG 或 WebP 材料");
+  if (file.size > 1000000) throw new Error("材料较大，请选择1MB以内的文件");
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () =>
+      resolve({ name: file.name, type: file.type, data: reader.result });
+    reader.onerror = () => reject(new Error("读取材料失败，请重新选择"));
+    reader.readAsDataURL(file);
+  });
+}
+function openTemplateEditor(id = "") {
+  const original = state().templates.find((t) => t.id === id),
+    editing = original?.status === "returned";
+  modal(
+    editing ? "补充并重提模板" : "建立照护模板",
+    "模板内容经医生审核后，才可作为院方准备结构。",
+    `${original?.returnReason ? `<div class="notice amber">${icon("chat")}${esc(original.returnReason)}</div>` : ""}${field("模板名称", "name", original ? (editing ? original.name : original.name + " · 新结构") : "", "text", true)}${select(
+      "适用场景",
+      "scene",
+      [
+        ["眼科术后", "眼科术后"],
+        ["骨科术后", "骨科术后"],
+        ["外科术后", "外科术后"],
+      ],
+      original?.scene || "外科术后",
+    )}${planEditors(original?.items || [{ title: "日常照护", time: "09:00", type: "护理", detail: "依照本院交付的具体指导核对执行，并记录实际情况。" }])}`,
+    {
+      label: "提交临床审核",
+      handler: (d) =>
+        run({
+          type: editing ? "editTemplate" : "template",
+          id: original?.id,
+          ...d,
+          items: readItems(),
+        }),
+    },
+    true,
+  );
+}
 async function onAction(el) {
   const action = el.dataset.action,
     id = el.dataset.id || "",
     s = state(),
     r = route();
   switch (action) {
+    case "new-round":
+      openNewRound(id);
+      break;
+    case "withdraw-plan":
+      modal(
+        "撤销待生效安排",
+        "撤销不改变当前有效安排和历史执行记录。",
+        textarea("撤销原因", "reason", "", true),
+        {
+          label: "确认撤销",
+          handler: (d) => run({ type: "withdrawFuturePlan", id, ...d }),
+        },
+      );
+      break;
+    case "family-more": {
+      const p = selectedPet();
+      modal(
+        "栖愈 · 家庭照护",
+        `${p.name}的本轮服务`,
+        `${roleMenu()}<div class="divider"></div><div class="search-results">${linkBtn("查看当前照护安排", href("family", "plan", p.id), "full", "clipboard")}${linkBtn("管理家人和交接", href("family", "me", p.id), "full", "users")}${btn("下载本轮资料", "export-pet", p.id, "full", "download")}</div><div class="notice">${icon("building")}<div>${esc(s.clinic.name)}<br>服务时间 ${esc(s.clinic.hours)}</div></div>`,
+      );
+      break;
+    }
+    case "add-task-record":
+      openTask(id, true);
+      break;
+    case "task-concern": {
+      const t = s.tasks.find((t) => t.id === id);
+      openConcern(t.petId, id);
+      break;
+    }
+    case "ack-action":
+      if (run({ type: "ackAction", id }, false)) concernDetail(id);
+      break;
+    case "reassign":
+      modal(
+        "交接负责人",
+        "当前问题、来源和处理历史将一并交给接手人。",
+        `${select("接手人", "assignee", [
+          [s.clinic.contact, s.clinic.contact + " · 协调员"],
+          [s.clinic.backup, s.clinic.backup + " · 替补协调员"],
+          [roles.doctor.person, roles.doctor.person + " · 主治兽医"],
+        ])}${textarea("交接说明", "note", "", true)}`,
+        {
+          label: "确认责任交接",
+          handler: (d) => {
+            if (run({ type: "reassign", id, ...d }, false)) concernDetail(id);
+          },
+        },
+      );
+      break;
+    case "edit-pet": {
+      const p = petById(s, id);
+      modal(
+        "编辑病例基础资料",
+        "基础资料更新不会改写正式照护安排和既往事实。",
+        `<div class="form-grid">${field("宠物姓名", "name", p.name, "text", true)}${field("主人称呼", "owner", p.owner, "text", true)}${field("品种", "breed", p.breed)}${field("年龄", "age", p.age)}${field("体重", "weight", p.weight)}${field("联系电话", "phone", p.phone, "tel")}</div>`,
+        {
+          label: "保存基础资料",
+          handler: (d) => run({ type: "editPet", petId: id, ...d }),
+        },
+      );
+      break;
+    }
+    case "reschedule": {
+      const a = s.appointments.find((a) => a.id === id);
+      modal(
+        "调整复查时间",
+        r.role === "family"
+          ? "医院确认前，原预约继续保留。"
+          : "确认本次改约后，原预约将取消。",
+        `<div class="form-grid">${field("新的复查日期", "date", a.date, "date", true)}${field("新的时段", "time", a.time, "time", true)}</div>${textarea("改约说明", "note", "", true)}`,
+        {
+          label: r.role === "family" ? "提交改约申请" : "确认改约",
+          handler: (d) => run({ type: "reschedule", id, ...d }),
+        },
+      );
+      dialog.querySelector("[name=date]").min = day();
+      break;
+    }
+    case "edit-template":
+      openTemplateEditor(id);
+      break;
+    case "return-template":
+      modal(
+        "退回模板补充",
+        "说明需要核对的场景、字段或内容。",
+        textarea("补充要求", "reason", "", true),
+        {
+          label: "退回运营补充",
+          handler: (d) => run({ type: "returnTemplate", id, ...d }),
+        },
+      );
+      break;
+    case "complete-renewal":
+      modal(
+        "处理续订申请",
+        "记录与医院确认的服务方案和下一周期交付。",
+        textarea("续订交付内容", "note", "", true),
+        {
+          label: "确认续订完成",
+          handler: (d) => run({ type: "completeRenewal", ...d }),
+        },
+      );
+      break;
+    case "refund-activation":
+      modal(
+        "登记实际退款",
+        "核对已结算条目与实际退款凭证，资料和照护安排继续保留。",
+        `${textarea("退款原因", "reason", "", true)}${field("退款凭证或流水号", "reference", "", "text", true)}`,
+        {
+          label: "确认登记退款",
+          handler: (d) => run({ type: "refund", id, ...d }),
+        },
+      );
+      break;
+    case "save-plan-draft": {
+      const form = dialog.querySelector("#modal-form");
+      if (!form.reportValidity()) break;
+      const d = formData(form),
+        sourceDocument = await documentFile(form.elements.sourceFile?.files[0]);
+      run({ type: "savePlan", id, ...d, sourceDocument, items: readItems() });
+      break;
+    }
+    case "download-source": {
+      const doc = s.plans.find((p) => p.id === id)?.sourceDocument;
+      if (!doc) throw new Error("该材料尚未上传");
+      const response = await fetch(doc.data),
+        blob = await response.blob(),
+        url = URL.createObjectURL(blob),
+        a = document.createElement("a");
+      a.href = url;
+      a.download = doc.name;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      toast("原始材料已下载");
+      break;
+    }
+
     case "menu":
-      document.querySelector(".sidebar").classList.toggle("open");
+      if (document.querySelector(".sidebar").classList.contains("open")) {
+        document.querySelector(".sidebar").classList.remove("open");
+        document.querySelector(".mobile-scrim")?.remove();
+        break;
+      }
+      document.querySelector(".sidebar").classList.add("open");
       if (!document.querySelector(".mobile-scrim")) {
         const b = document.createElement("button");
         b.className = "mobile-scrim";
@@ -1115,14 +1427,38 @@ async function onAction(el) {
       break;
     case "notifications":
       if (r.role === "ops") {
-        go("ops", "support");
+        modal(
+          "机构服务待办",
+          "跟进入驻、支持与续订。",
+          `${s.institutions
+            .filter((c) => c.status === "onboarding")
+            .map(
+              (c) =>
+                `<a class="search-result" data-action="close-on-nav" href="${href("ops", "institutions")}">${icon("building")}<div><b>${esc(c.name)}</b><small>等待实施验收</small></div>${icon("chevron")}</a>`,
+            )
+            .join(
+              "",
+            )}${s.renewal?.status === "requested" ? `<a class="search-result" data-action="close-on-nav" href="${href("ops", "support")}">${icon("wallet")}<div><b>${esc(s.clinic.name)}的续订申请</b><small>待运营跟进</small></div>${icon("chevron")}</a>` : ""}${s.tickets
+            .filter((t) => t.status === "open")
+            .map(
+              (t) =>
+                `<a class="search-result" data-action="close-on-nav" href="${href("ops", "support")}">${icon("chat")}<div><b>${esc(t.title)}</b><small>机构支持跟进中</small></div>${icon("chevron")}</a>`,
+            )
+            .join(
+              "",
+            )}${!s.institutions.some((c) => c.status === "onboarding") && s.renewal?.status !== "requested" && !s.tickets.some((t) => t.status === "open") ? empty("当前没有待处理事项", "新的机构服务请求会出现在这里。") : ""}`,
+        );
         break;
       }
       modal(
         "需要你关注的事项",
         "把需要处理的事交到明确的人手中。",
         s.concerns
-          .filter((c) => c.status !== "resolved")
+          .filter(
+            (c) =>
+              c.status !== "resolved" &&
+              (r.role !== "doctor" || c.assigneeRole === "doctor"),
+          )
           .map(
             (c) =>
               `<button class="search-result" style="width:100%;margin-bottom:10px;text-align:left" data-action="concern-detail" data-id="${c.id}">${icon("chat")}<div><b>${esc(c.title)}</b><small>${esc(petById(s, c.petId).name)} · ${esc(concernLabels[c.status])}</small></div>${icon("chevron")}</button>`,
@@ -1342,7 +1678,11 @@ async function onAction(el) {
               p.owner,
               fmt(a.at, true),
               a.amount,
-              a.status === "valid" ? "有效" : "作废",
+              a.status === "valid"
+                ? "有效"
+                : a.status === "refunded"
+                  ? "已退款"
+                  : "作废",
               a.reason || "",
             ];
           }),
@@ -1391,31 +1731,14 @@ async function onAction(el) {
       break;
     }
     case "new-template":
-      modal(
-        "建立照护模板",
-        "模板提供结构与字段，具体安排仍由医院确认。",
-        `${field("模板名称", "name", "", "text", true)}${select(
-          "适用场景",
-          "scene",
-          [
-            ["眼科术后", "眼科术后"],
-            ["骨科术后", "骨科术后"],
-            ["外科术后", "外科术后"],
-          ],
-        )}${planEditors([{ title: "日常照护", time: "09:00", type: "护理", detail: "依照本院交付的具体指导核对执行，并记录实际情况。" }])}`,
-        {
-          label: "提交临床审核",
-          handler: (d) => run({ type: "template", ...d, items: readItems() }),
-        },
-        true,
-      );
+      openTemplateEditor();
       break;
     case "review-template": {
       const t = s.templates.find((t) => t.id === id);
       modal(
         "审核照护模板",
         `${t.name} · ${t.scene}`,
-        `${instructionList(t)}<label class="checkbox"><input type="checkbox" required>已核对模板适用场景及内容，确认可以作为院方准备结构。</label>`,
+        `${instructionList(t)}<div class="actions">${btn("退回补充", "return-template", t.id, "", "back")}</div><label class="checkbox"><input type="checkbox" required>已核对模板适用场景及内容，确认可以作为院方准备结构。</label>`,
         {
           label: "确认审核通过",
           handler: () => run({ type: "approveTemplate", id }),
@@ -1474,9 +1797,13 @@ async function onAction(el) {
         },
       );
       break;
+    default:
+      throw new Error("该操作暂不可用，请重新打开页面。");
   }
 }
 document.addEventListener("click", (e) => {
+  for (const details of document.querySelectorAll("details[open]"))
+    if (!details.contains(e.target)) details.open = false;
   const el = e.target.closest("[data-action]");
   if (el) {
     if (el.tagName === "BUTTON") e.preventDefault();
@@ -1566,7 +1893,12 @@ dialog.addEventListener("click", (e) => {
 });
 dialog.addEventListener("cancel", () => {
   modalSubmit = null;
-  returnFocus?.focus?.();
+  if (returnFocus?.isConnected) returnFocus.focus({ preventScroll: true });
+  else {
+    const main = document.querySelector("main");
+    main?.setAttribute("tabindex", "-1");
+    main?.focus({ preventScroll: true });
+  }
 });
 window.addEventListener("hashchange", () => {
   closeDialog();
@@ -1577,7 +1909,21 @@ window.addEventListener("hashchange", () => {
   render();
   window.scrollTo(0, 0);
 });
-window.addEventListener("qiyu:update", render);
+window.addEventListener("qiyu:update", (e) => {
+  render();
+  if (e.detail?.external && dialog.open) {
+    const form = dialog.querySelector("form");
+    if (form) {
+      let note = dialog.querySelector(".external-update");
+      if (!note) {
+        note = document.createElement("div");
+        note.className = "notice amber external-update";
+        note.textContent = "此服务有新的协作记录，提交前请核对当前状态。";
+        form.prepend(note);
+      }
+    }
+  }
+});
 setInterval(() => {
   if (
     !dialog.open &&
@@ -1586,6 +1932,24 @@ setInterval(() => {
     render();
 }, 60000);
 document.addEventListener("keydown", (e) => {
+  if (
+    e.target.matches(".tab") &&
+    ["ArrowLeft", "ArrowRight", "Home", "End"].includes(e.key)
+  ) {
+    e.preventDefault();
+    const tabs = [...e.target.closest(".tabs").querySelectorAll(".tab")];
+    const i = tabs.indexOf(e.target);
+    const next =
+      e.key === "Home"
+        ? 0
+        : e.key === "End"
+          ? tabs.length - 1
+          : (i + (e.key === "ArrowRight" ? 1 : -1) + tabs.length) % tabs.length;
+    const id = tabs[next].dataset.id;
+    tabs[next].click();
+    document.querySelector(`.tab[data-id="${id}"]`)?.focus();
+    return;
+  }
   if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
     e.preventDefault();
     searchModal();

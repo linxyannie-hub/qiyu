@@ -1,42 +1,44 @@
-import { seed, syncTasks, transition } from "./domain.mjs";
+import { seed, syncTasks, transition, normalizeState } from "./domain.mjs";
 const KEY = "qiyu.care.workspace";
 let state;
-try {
-  const saved = JSON.parse(localStorage.getItem(KEY));
-  state = saved?.schema === 1 && Array.isArray(saved.pets) ? saved : seed();
-} catch {
-  state = seed();
+function readSaved() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(KEY));
+    return saved?.schema === 1 &&
+      Array.isArray(saved.pets) &&
+      Array.isArray(saved.plans)
+      ? normalizeState(saved)
+      : null;
+  } catch {
+    return null;
+  }
 }
+state = readSaved() || seed();
 syncTasks(state);
+try {
+  localStorage.setItem(KEY, JSON.stringify(state));
+} catch {}
 export const getState = () => syncTasks(state);
 export function dispatch(action, role, actor) {
-  const saved = localStorage.getItem(KEY);
-  if (saved) {
-    const latest = JSON.parse(saved);
-    if (latest.revision > state.revision) state = latest;
-  }
+  const latest = readSaved();
+  if (latest?.revision > state.revision) state = latest;
   const result = transition(state, action, role, actor);
   try {
     localStorage.setItem(KEY, JSON.stringify(result.state));
   } catch {
-    throw new Error(
-      "浏览器存储空间不足，未保存本次操作。请减少附件大小后重试。",
-    );
+    throw new Error("本次操作尚未保存，请减少附件大小后重试。");
   }
   state = result.state;
-  window.dispatchEvent(new CustomEvent("qiyu:update"));
+  window.dispatchEvent(new CustomEvent("qiyu:update", { detail: { action } }));
   return result;
 }
 export function refresh() {
-  const raw = localStorage.getItem(KEY);
-  if (raw) {
-    try {
-      const next = JSON.parse(raw);
-      if (next.schema === 1) {
-        state = syncTasks(next);
-        window.dispatchEvent(new CustomEvent("qiyu:update"));
-      }
-    } catch {}
+  const next = readSaved();
+  if (next) {
+    state = syncTasks(next);
+    window.dispatchEvent(
+      new CustomEvent("qiyu:update", { detail: { external: true } }),
+    );
   }
 }
 window.addEventListener("storage", (e) => {

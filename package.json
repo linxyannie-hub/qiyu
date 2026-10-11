@@ -8,9 +8,13 @@
     "start": "node scripts/serve.mjs",
     "build": "node scripts/build.mjs",
     "test": "node --test tests/*.test.mjs",
-    "check": "node --check assets/app.mjs && node --check assets/domain.mjs && node --check assets/store.mjs"
+    "check": "node --check assets/app.mjs && node --check assets/domain.mjs && node --check assets/store.mjs",
+    "test:browser": "node tests/browser.mjs"
   },
   "engines": {
     "node": ">=20"
+  },
+  "devDependencies": {
+    "playwright": "1.64.0"
   }
 }

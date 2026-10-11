@@ -319,7 +319,7 @@ export const currentPlan = (s, id, at = iso()) =>
         b.createdAt.localeCompare(a.createdAt),
     )[0];
 export const latestPlan = (s, id) =>
-  s.plans.filter((p) => p.petId === id).at(-1);
+  s.plans.filter((p) => p.petId === id && p.status !== "withdrawn").at(-1);
 export const petById = (s, id) => s.pets.find((p) => p.id === id);
 export const resultLabels = {
   done: "已按安排执行",
@@ -342,15 +342,60 @@ export const appointmentLabels = {
   completed: "已完成",
   cancelled: "已取消",
 };
-export function syncTasks(s, at = iso()) {
+export function normalizeState(s) {
+  s.refunds ||= [];
+  for (const c of s.concerns) {
+    c.assigneeRole ||=
+      c.assignee === roles.doctor.person
+        ? "doctor"
+        : c.assignee
+          ? "clinic"
+          : null;
+  }
+  for (const t of s.templates) {
+    if (!t.items && t.status === "approved") {
+      const pl = s.plans.find((p) => petById(s, p.petId)?.scene === t.scene);
+      t.items = structuredClone(pl?.items || []);
+      t.count = t.items.length;
+    }
+  }
   for (const pet of s.pets) {
+    const current = pet.members.find((m) => m.name === pet.member);
+    if (!current?.active || (current.expires && current.expires < day()))
+      pet.member = pet.owner;
+    if (
+      pet.handoff?.status === "pending" &&
+      !pet.members.some(
+        (m) =>
+          m.name === pet.handoff.to &&
+          m.active &&
+          (!m.expires || m.expires >= day()),
+      )
+    )
+      pet.handoff = null;
+  }
+  return s;
+}
+export function syncTasks(s, at = iso()) {
+  normalizeState(s);
+  for (const pet of s.pets) {
+    if (pet.status !== "active") continue;
     const plan = currentPlan(s, pet.id, at);
     if (!plan) continue;
     for (const t of s.tasks.filter(
-      (t) => t.petId === pet.id && t.date >= day() && t.planId !== plan.id,
+      (t) =>
+        t.petId === pet.id &&
+        t.planId !== plan.id &&
+        Date.parse(`${t.date}T${t.time}:00+08:00`) >=
+          Date.parse(plan.effectiveAt),
     ))
       t.cancelled = true;
     for (const item of plan.items.filter((i) => i.active !== false)) {
+      if (
+        Date.parse(`${day()}T${item.time}:00+08:00`) <
+        Date.parse(plan.effectiveAt)
+      )
+        continue;
       if (
         !s.tasks.some(
           (t) =>
@@ -416,7 +461,7 @@ export function transition(
   role,
   actor = roles[role]?.person,
 ) {
-  const s = structuredClone(original);
+  const s = normalizeState(structuredClone(original));
   syncTasks(s);
   const p = action.petId ? petById(s, action.petId) : null;
   let message = "已保存";
@@ -424,12 +469,24 @@ export function transition(
   const concern = () => {
     const c = s.concerns.find((c) => c.id === action.id);
     if (!c) throw new Error("未找到该问题，请刷新后重试。");
+    if (role === "family") {
+      const pet = petById(s, c.petId);
+      if (
+        !pet?.members.some(
+          (m) =>
+            m.active && (!m.expires || m.expires >= day()) && m.name === actor,
+        )
+      )
+        throw new Error("当前照护者没有本轮服务的授权。");
+    }
     return c;
   };
   switch (action.type) {
     case "acceptService":
       requireRole(role, ["family"]);
       if (!p) throw new Error("未找到服务");
+      if (p.status === "ended")
+        throw new Error("本轮已结束，请查看已交付资料。");
       if (!currentPlan(s, p.id)) throw new Error("医院尚未发布正式安排。");
       p.accepted = true;
       p.status = "active";
@@ -485,7 +542,7 @@ export function transition(
           task.id,
           "记录核实",
         );
-      if (task.cancelled)
+      if (task.cancelled || currentPlan(s, p.id, at)?.id !== task.planId)
         createConcern(
           s,
           p.id,
@@ -563,8 +620,9 @@ export function transition(
         const c = concern();
         if (c.status !== "new")
           throw new Error("该问题已被接手，请查看最新状态。");
-        c.status = "accepted";
+        c.status = role === "doctor" ? "clinical" : "accepted";
         c.assignee = actor;
+        c.assigneeRole = role;
         c.acceptedAt = iso();
         c.messages.push({
           actor,
@@ -582,7 +640,8 @@ export function transition(
         if (!["accepted", "supplement"].includes(c.status))
           throw new Error("请先接手问题再转交医生。");
         c.status = "clinical";
-        c.assignee = "陈予安";
+        c.assignee = roles.doctor.person;
+        c.assigneeRole = "doctor";
         c.messages.push({
           actor,
           role,
@@ -626,7 +685,7 @@ export function transition(
         )
           throw new Error("照护授权已失效。");
         if (c.status === "supplement")
-          c.status = c.assignee === "陈予安" ? "clinical" : "accepted";
+          c.status = c.assigneeRole === "doctor" ? "clinical" : "accepted";
       } else {
         requireRole(role, ["clinic", "doctor"]);
         if (c.status === "new") throw new Error("请先接手问题。");
@@ -639,6 +698,47 @@ export function transition(
       message = role === "family" ? "补充信息已发送" : "答复与后续安排已交付";
       break;
     }
+    case "ackAction":
+      requireRole(role, ["family"]);
+      {
+        const c = concern();
+        if (c.status !== "answered")
+          throw new Error("请先查看医院的专业答复。");
+        c.status = "action";
+        c.messages.push({
+          actor,
+          role,
+          text: "已收到后续安排，正在落实。",
+          at: iso(),
+        });
+        message = "已确认后续安排，待实际行动完成";
+      }
+      break;
+    case "reassign":
+      requireRole(role, ["clinic", "doctor"]);
+      {
+        const c = concern();
+        if (c.status === "resolved") throw new Error("已解决的问题无需转交");
+        const name = required(action.assignee, "请选择接手人");
+        if (
+          ![s.clinic.contact, s.clinic.backup, roles.doctor.person].includes(
+            name,
+          )
+        )
+          throw new Error("请选择本院已配置的接手人员");
+        c.assignee = name;
+        c.assigneeRole = name === roles.doctor.person ? "doctor" : "clinic";
+        c.status = c.assigneeRole === "doctor" ? "clinical" : "accepted";
+        c.acceptedAt ||= iso();
+        c.messages.push({
+          actor,
+          role,
+          text: `已交由${name}继续跟进。${action.note || ""}`,
+          at: iso(),
+        });
+        message = "责任交接已记录";
+      }
+      break;
     case "resolve":
       requireRole(role, ["family", "clinic", "doctor"]);
       {
@@ -656,7 +756,15 @@ export function transition(
       {
         const c = concern();
         if (c.status !== "resolved") throw new Error("此问题尚未关闭。");
-        c.status = c.assignee ? "accepted" : "new";
+        c.status =
+          c.assigneeRole === "doctor"
+            ? "clinical"
+            : c.assignee
+              ? "accepted"
+              : "new";
+        c.nextAction = "";
+        delete c.closedAt;
+        delete c.closeReason;
         c.messages.push({
           actor,
           role,
@@ -670,8 +778,17 @@ export function transition(
       requireRole(role, ["clinic"]);
       const name = required(action.name, "请填写宠物姓名。");
       const owner = required(action.owner, "请填写主人称呼。");
+      if (action.review && action.review < day())
+        throw new Error("建议复查日期不能早于今天。");
+      const previous = action.previousServiceId
+        ? petById(s, action.previousServiceId)
+        : null;
+      if (action.previousServiceId && previous?.status !== "ended")
+        throw new Error("请先结束上一轮服务后再建立新一轮。");
       const pet = {
         id: uid("pet"),
+        profileId: previous?.profileId || previous?.id || uid("profile"),
+        previousServiceId: previous?.id || null,
         name,
         owner,
         species: action.species || "犬",
@@ -698,6 +815,7 @@ export function transition(
         createdAt: iso(),
         author: actor,
         source: required(action.source, "请填写材料来源。"),
+        sourceDocument: action.sourceDocument || null,
         note: action.note || "",
         reason: "出院照护安排",
         effectiveAt: iso(),
@@ -719,6 +837,7 @@ export function transition(
         plan.items = action.items;
         plan.source = required(action.source, "请填写来源");
         plan.note = action.note || "";
+        if (action.sourceDocument) plan.sourceDocument = action.sourceDocument;
         plan.status = "draft";
         message = "草稿已保存";
       }
@@ -756,6 +875,20 @@ export function transition(
         plan.publishedAt = iso();
         plan.effectiveAt = action.effectiveAt || iso();
         plan.author = actor;
+        const pet = petById(s, plan.petId);
+        if (
+          pet.review &&
+          pet.review >= day() &&
+          !s.appointments.some((a) => a.petId === pet.id)
+        )
+          s.appointments.push({
+            id: uid("appt"),
+            petId: pet.id,
+            date: pet.review,
+            time: "10:00",
+            status: "requested",
+            note: "出院计划中的建议复查，待本院确认",
+          });
         message = "正式照护安排已发布";
       }
       break;
@@ -763,6 +896,15 @@ export function transition(
       requireRole(role, ["doctor"]);
       {
         if (!p || p.status === "ended") throw new Error("当前服务不可调整。");
+        if (
+          s.plans.some(
+            (pl) =>
+              pl.petId === p.id &&
+              pl.status === "published" &&
+              pl.effectiveAt > iso(),
+          )
+        )
+          throw new Error("已有待生效的安排，请先核对并撤销该安排后再调整。");
         const old = currentPlan(s, p.id);
         if (!old || old.id !== action.expectedPlanId)
           throw new Error("安排已更新，请重新查看后调整。");
@@ -786,6 +928,18 @@ export function transition(
         s.plans.push(plan);
         message = "照护安排已更新";
         entity = plan.id;
+      }
+      break;
+    case "withdrawFuturePlan":
+      requireRole(role, ["doctor"]);
+      {
+        const pl = s.plans.find((pl) => pl.id === action.id);
+        if (!pl || pl.status !== "published" || pl.effectiveAt <= iso())
+          throw new Error("只有尚未生效的安排可以撤销");
+        pl.status = "withdrawn";
+        pl.withdrawReason = required(action.reason, "请填写撤销原因");
+        pl.withdrawnAt = iso();
+        message = "待生效安排已撤销，当前安排继续有效";
       }
       break;
     case "invite":
@@ -870,6 +1024,46 @@ export function transition(
       message =
         role === "clinic" ? "复查时间已确认" : "已提交复查申请，等待医院确认";
       break;
+    case "reschedule": {
+      requireRole(role, ["family", "clinic"]);
+      const previous = s.appointments.find((a) => a.id === action.id);
+      if (!previous || !["confirmed", "requested"].includes(previous.status))
+        throw new Error("当前预约不能改约。");
+      if (
+        !action.date ||
+        action.date < day() ||
+        !/^([01]\d|2[0-3]):[0-5]\d$/.test(action.time)
+      )
+        throw new Error("请选择有效的复查时间。");
+      if (
+        s.appointments.some(
+          (a) => a.replacesId === previous.id && a.status === "requested",
+        )
+      )
+        throw new Error("已有待确认的改约申请，请等待院方处理。");
+      const pet = petById(s, previous.petId);
+      if (pet.status === "ended") throw new Error("本轮已结束，无法改约。");
+      const changed = {
+        id: uid("appt"),
+        petId: previous.petId,
+        date: action.date,
+        time: action.time,
+        status: role === "clinic" ? "confirmed" : "requested",
+        note: action.note || "复查改约",
+        replacesId: previous.id,
+      };
+      if (role === "clinic") {
+        previous.status = "cancelled";
+        previous.cancelReason = "改约已确认";
+        pet.review = action.date;
+      }
+      s.appointments.push(changed);
+      message =
+        role === "clinic"
+          ? "复查改约已确认"
+          : "改约申请已提交，原预约在确认前保留";
+      break;
+    }
     case "appointmentStatus":
       requireRole(role, ["clinic", "family"]);
       {
@@ -884,6 +1078,17 @@ export function transition(
         if (a.status === "completed" || a.status === "cancelled")
           throw new Error("当前预约已结束");
         a.status = action.status;
+        if (a.status === "confirmed") {
+          if (a.replacesId) {
+            const old = s.appointments.find((x) => x.id === a.replacesId);
+            if (old && old.status !== "completed") {
+              old.status = "cancelled";
+              old.cancelReason = "改约已确认";
+            }
+          }
+          petById(s, a.petId).review = a.date;
+        }
+        if (a.status === "completed") a.completedAt = iso();
         message = "复查状态已更新";
       }
       break;
@@ -897,8 +1102,36 @@ export function transition(
       p.endReason = required(action.reason, "请填写服务结束原因及下一步。");
       message = "本轮服务已结束，资料可继续获取";
       break;
+    case "editPet":
+      requireRole(role, ["clinic"]);
+      if (!p) throw new Error("未找到病例");
+      {
+        const oldOwner = p.owner;
+        const owner = required(action.owner, "请填写主人称呼");
+        Object.assign(p, {
+          name: required(action.name, "请填写宠物姓名"),
+          owner,
+          breed: action.breed || "待补充",
+          age: action.age || "待补充",
+          weight: action.weight || "待补充",
+          phone: action.phone || "",
+        });
+        const member = p.members.find((m) => m.role === "主人");
+        if (member) member.name = owner;
+        if (p.member === oldOwner) p.member = owner;
+        message = "病例基础资料已更新";
+      }
+      break;
     case "settings":
       requireRole(role, ["clinic"]);
+      for (const name of ["name", "hours", "phone", "contact", "backup"])
+        required(action.values[name], "请完整填写机构服务信息");
+      if (
+        !Number.isInteger(Number(action.values.target)) ||
+        Number(action.values.target) < 1 ||
+        Number(action.values.target) > 1440
+      )
+        throw new Error("接单目标需为1—1440分钟");
       s.clinic = { ...s.clinic, ...action.values };
       message = "服务设置已保存";
       break;
@@ -935,6 +1168,33 @@ export function transition(
         items: action.items,
       });
       message = "模板已建立，待临床审核";
+      break;
+    case "editTemplate":
+      requireRole(role, ["ops"]);
+      {
+        const t = s.templates.find((t) => t.id === action.id);
+        if (!t || t.status !== "returned")
+          throw new Error("仅退回的模板可以修改重提");
+        validateItems(action.items);
+        Object.assign(t, {
+          name: required(action.name, "请填写模板名称"),
+          scene: action.scene,
+          items: action.items,
+          count: action.items.length,
+          status: "pending",
+        });
+        message = "模板已重新提交临床审核";
+      }
+      break;
+    case "returnTemplate":
+      requireRole(role, ["doctor"]);
+      {
+        const t = s.templates.find((t) => t.id === action.id);
+        if (!t || t.status !== "pending") throw new Error("模板不在审核队列");
+        t.status = "returned";
+        t.returnReason = required(action.reason, "请填写需要补充的内容");
+        message = "模板已退回补充";
+      }
       break;
     case "approveTemplate":
       requireRole(role, ["doctor"]);
@@ -981,6 +1241,40 @@ export function transition(
         a.reason = required(action.reason, "请填写作废原因");
         message = "已作废计费条目";
       }
+      break;
+    case "refund":
+      requireRole(role, ["ops"]);
+      {
+        const a = s.activations.find((a) => a.id === action.id);
+        if (
+          !a ||
+          a.status !== "valid" ||
+          !s.payments.some((p) => p.activationIds.includes(a.id))
+        )
+          throw new Error("仅已结算的有效条目可以登记退款");
+        const reason = required(action.reason, "请填写退款原因");
+        const reference = required(action.reference, "请填写退款凭证");
+        s.refunds.push({
+          id: uid("refund"),
+          activationId: a.id,
+          amount: a.amount,
+          reason,
+          reference,
+          at: iso(),
+        });
+        a.status = "refunded";
+        a.reason = reason;
+        message = "退款与用量调整已记录";
+      }
+      break;
+    case "completeRenewal":
+      requireRole(role, ["ops"]);
+      if (s.renewal?.status !== "requested")
+        throw new Error("当前没有待处理续订申请");
+      s.renewal.status = "completed";
+      s.renewal.completedAt = iso();
+      s.renewal.note = required(action.note, "请填写续订交付内容");
+      message = "续订申请已处理";
       break;
     case "payment":
       requireRole(role, ["ops"]);

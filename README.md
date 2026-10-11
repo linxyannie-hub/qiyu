@@ -4,7 +4,7 @@
 
 ## 启动
 
-需要 Node.js 20 或更新版本，无运行时第三方依赖。
+需要 Node.js 20 或更新版本。页面无运行时第三方依赖。浏览器检查使用 Playwright。
 
 ```bash
 npm start
@@ -26,8 +26,11 @@ npm start
 ## 验证与发布
 
 ```bash
+npm ci
+npx playwright install chromium
 npm run check
 npm test
+npm run test:browser
 npm run build
 ```
 
@@ -48,9 +51,12 @@ scripts/
   build.mjs     静态发布打包
 tests/
   domain.test.mjs
+  browser.mjs        多端页面与完整交互回归
 .github/workflows/deploy.yml
 ```
 
 ## 业务约定
 
 正式安排、执行事实、问题责任、复查状态和软件用量分别建模。已发布安排保留历史；执行更正追加记录；同轮安排调整不重复计费；改约不改医嘱；结束服务前需处理未结问题。HTML 资料包和 CSV 报告均可从对应页面下载。
+
+家庭照护在桌面浏览器中以手机容器呈现，内部页面独立滚动；在手机上适应整屏。既有照护数据自动迁移并保留。

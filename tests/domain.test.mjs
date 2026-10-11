@@ -385,3 +385,268 @@ test("过期成员的执行报告被拒绝", () => {
     /授权/,
   );
 });
+test("医生负责的问题重新打开后仍处于专业判断状态", () => {
+  let s = seed();
+  s = apply(
+    s,
+    { type: "reply", id: "concern-1", text: "已核对", nextAction: "复查" },
+    "doctor",
+  );
+  s = apply(s, { type: "resolve", id: "concern-1" }, "family", "周女士");
+  s = apply(s, { type: "reopen", id: "concern-1" }, "family", "周女士");
+  assert.equal(s.concerns[0].status, "clinical");
+  assert.equal(s.concerns[0].assigneeRole, "doctor");
+  assert.equal(s.concerns[0].nextAction, "");
+});
+test("家人确认下一步后仍需要完成实际行动才关闭问题", () => {
+  let s = seed();
+  s = apply(
+    s,
+    { type: "reply", id: "concern-1", text: "已核对", nextAction: "联系本院" },
+    "doctor",
+  );
+  s = apply(s, { type: "ackAction", id: "concern-1" }, "family", "周女士");
+  assert.equal(s.concerns[0].status, "action");
+  s = apply(s, { type: "resolve", id: "concern-1" }, "family", "周女士");
+  assert.equal(s.concerns[0].status, "resolved");
+});
+test("责任转交给替补时保留专业处理历史", () => {
+  let s = seed();
+  s = apply(s, {
+    type: "reassign",
+    id: "concern-1",
+    assignee: "王雨",
+    note: "接班跟进",
+  });
+  assert.equal(s.concerns[0].status, "accepted");
+  assert.equal(s.concerns[0].assignee, "王雨");
+  assert.ok(s.concerns[0].messages.at(-1).text.includes("王雨"));
+});
+test("改约待确认时保留原预约，确认后替换且不改医嘱", () => {
+  let s = seed(),
+    plans = JSON.stringify(s.plans);
+  s = apply(
+    s,
+    { type: "reschedule", id: "appt-1", date: day(5), time: "15:00" },
+    "family",
+    "周女士",
+  );
+  const id = s.appointments.at(-1).id;
+  assert.equal(s.appointments[0].status, "confirmed");
+  s = apply(s, { type: "appointmentStatus", id, status: "confirmed" });
+  assert.equal(s.appointments[0].status, "cancelled");
+  assert.equal(s.appointments.at(-1).status, "confirmed");
+  assert.equal(JSON.stringify(s.plans), plans);
+});
+test("撤销待确认改约时不取消原复查", () => {
+  let s = seed();
+  s = apply(
+    s,
+    { type: "reschedule", id: "appt-1", date: day(5), time: "15:00" },
+    "family",
+    "周女士",
+  );
+  s = apply(
+    s,
+    {
+      type: "appointmentStatus",
+      id: s.appointments.at(-1).id,
+      status: "cancelled",
+    },
+    "family",
+    "周女士",
+  );
+  assert.equal(s.appointments[0].status, "confirmed");
+});
+test("同一预约存在待确认改约时禁止重复申请", () => {
+  let s = seed();
+  const action = {
+    type: "reschedule",
+    id: "appt-1",
+    date: day(5),
+    time: "15:00",
+  };
+  s = apply(s, action, "family", "周女士");
+  assert.throws(() => apply(s, action, "family", "周女士"), /已有/);
+});
+test("模板退回补充后可修改重提并重新审核", () => {
+  let s = seed();
+  s = apply(
+    s,
+    { type: "template", name: "模板", scene: "外科术后", items: items() },
+    "ops",
+  );
+  const id = s.templates.at(-1).id;
+  s = apply(
+    s,
+    { type: "returnTemplate", id, reason: "补充操作说明" },
+    "doctor",
+  );
+  assert.equal(s.templates.at(-1).status, "returned");
+  s = apply(
+    s,
+    {
+      type: "editTemplate",
+      id,
+      name: "补充后的模板",
+      scene: "外科术后",
+      items: items(),
+    },
+    "ops",
+  );
+  s = apply(s, { type: "approveTemplate", id }, "doctor");
+  assert.equal(s.templates.at(-1).status, "approved");
+});
+test("退款有凭证、调整有效用量，原临床资料继续保留", () => {
+  let s = seed();
+  const plans = JSON.stringify(s.plans);
+  s = apply(s, { type: "payment", reference: "收款凭证" }, "ops");
+  s = apply(
+    s,
+    { type: "refund", id: "act-1", reason: "用量核对", reference: "退款凭证" },
+    "ops",
+  );
+  assert.equal(s.activations[0].status, "refunded");
+  assert.equal(s.refunds[0].amount, 8);
+  assert.equal(JSON.stringify(s.plans), plans);
+  assert.throws(
+    () =>
+      apply(
+        s,
+        { type: "refund", id: "act-1", reason: "再退", reference: "002" },
+        "ops",
+      ),
+    /已结算/,
+  );
+});
+test("未结算条目不能标记成已退款", () =>
+  assert.throws(
+    () =>
+      apply(
+        seed(),
+        { type: "refund", id: "act-1", reason: "原因", reference: "凭证" },
+        "ops",
+      ),
+    /已结算/,
+  ));
+test("院方续订申请在运营端有完成出口", () => {
+  let s = seed();
+  s = apply(s, { type: "renewal" });
+  s = apply(
+    s,
+    { type: "completeRenewal", note: "继续使用按例计费方案" },
+    "ops",
+  );
+  assert.equal(s.renewal.status, "completed");
+});
+test("已结束服务不会再生成次日的待执行任务", () => {
+  const s = seed();
+  s.pets[0].status = "ended";
+  s.tasks = s.tasks.filter((t) => t.petId !== "pet-1");
+  s.concerns = s.concerns.filter((c) => c.petId !== "pet-1");
+  const next = apply(
+    s,
+    { type: "ticket", title: "支持", body: "记录" },
+    "clinic",
+  );
+  assert.equal(next.tasks.filter((t) => t.petId === "pet-1").length, 0);
+});
+test("过期家人的责任和未确认交接返回主人", () => {
+  let s = seed();
+  s.pets[0].member = "周先生";
+  s.pets[0].handoff = { to: "周先生", status: "pending" };
+  s.pets[0].members[1].expires = day(-1);
+  s = apply(s, { type: "ticket", title: "支持", body: "记录" });
+  assert.equal(s.pets[0].member, "周女士");
+  assert.equal(s.pets[0].handoff, null);
+});
+test("出院发布时建议复查进入确认队列", () => {
+  let s = seed();
+  s = apply(s, { type: "publish", id: "plan-4" }, "doctor");
+  assert.ok(
+    s.appointments.some((a) => a.petId === "pet-4" && a.status === "requested"),
+  );
+});
+test("待生效安排必须先撤销再另行调整", () => {
+  let s = seed();
+  s = apply(
+    s,
+    {
+      type: "revise",
+      petId: "pet-1",
+      expectedPlanId: "plan-1",
+      items: items(),
+      reason: "明日调整",
+      effectiveAt: new Date(Date.now() + 86400000).toISOString(),
+    },
+    "doctor",
+  );
+  const id = s.plans.at(-1).id;
+  assert.throws(
+    () =>
+      apply(
+        s,
+        {
+          type: "revise",
+          petId: "pet-1",
+          expectedPlanId: "plan-1",
+          items: items(),
+          reason: "再调整",
+        },
+        "doctor",
+      ),
+    /待生效/,
+  );
+  s = apply(
+    s,
+    { type: "withdrawFuturePlan", id, reason: "重新核对" },
+    "doctor",
+  );
+  assert.equal(currentPlan(s, "pet-1").id, "plan-1");
+  assert.equal(s.plans.at(-1).status, "withdrawn");
+});
+test("新一轮服务关联既有档案而不覆盖历史", () => {
+  let s = seed();
+  s.pets[0].status = "ended";
+  s = apply(s, {
+    type: "createPlan",
+    previousServiceId: "pet-1",
+    name: "团团",
+    owner: "周女士",
+    source: "新一轮指导",
+    items: items(),
+  });
+  assert.equal(s.pets.at(-1).previousServiceId, "pet-1");
+  assert.equal(s.pets.at(-1).profileId, "pet-1");
+  assert.equal(s.pets[0].status, "ended");
+  assert.equal(s.events[0].petId, "pet-1");
+});
+test("新的专业安排不凭空创建生效前的任务", () => {
+  let s = seed();
+  const effective = new Date().toISOString();
+  s = apply(
+    s,
+    {
+      type: "revise",
+      petId: "pet-1",
+      expectedPlanId: "plan-1",
+      items: [
+        {
+          id: "before",
+          title: "此前时间",
+          detail: "照护说明",
+          time: "00:00",
+          type: "护理",
+        },
+      ],
+      reason: "核对",
+      effectiveAt: effective,
+    },
+    "doctor",
+  );
+  assert.equal(
+    s.tasks.filter((t) => t.planId === s.plans.at(-1).id && t.time === "00:00")
+      .length,
+    0,
+  );
+});
