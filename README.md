@@ -1,10 +1,10 @@
 # 栖愈 Qiyu Care
 
-连接宠物家庭、医院随访团队、兽医与机构运营的诊后协同前端。
+面向复杂术后照护的纯前端网站，连接家庭实际执行、原医院接手、兽医交付下一步，以及复查与本轮照护结束。
 
 ## 启动
 
-需要 Node.js 20 或更新版本。页面无运行时第三方依赖。浏览器检查使用 Playwright。
+源码开发需要 Node.js 20 或更新版本。页面无运行时第三方依赖；esbuild 和 Playwright 仅用于构建与验证。
 
 ```bash
 npm start
@@ -31,10 +31,27 @@ npx playwright install chromium
 npm run check
 npm test
 npm run test:browser
+npm run test:static
 npm run build
 ```
 
-`dist/` 可部署至任何静态网站服务。GitHub Actions 在 `main` 更新时执行检查、测试、构建和 GitHub Pages 发布。
+`dist/` 是构建完成的静态网站，直接托管即可运行；使用相对资源路径与 hash 路由，支持域名根目录及子目录。发布入口是普通 `app.js`，无需 `.mjs` MIME 配置或运行服务器程序。CSS、图标与中文字体全部随网站提供。
+
+### 比赛提交与静态上传包
+
+请上传构建后的独立网站包。仓库源码 ZIP 包含开发配置、构建脚本和测试，不适合作为只接收前端页面的提交包。
+
+```bash
+npm run package:static
+# 或指定输出位置
+npm run package:static -- --output /完整路径/栖愈纯前端网站.zip
+```
+
+默认生成仓库上一级目录的 `栖愈纯前端网站.zip`。ZIP 的根目录直接是 `index.html` 与 `assets/`，其中只有 HTML、CSS、普通 JS、SVG、字体和字体授权文本；不包含 `package.json`、`node_modules`、构建脚本、测试、Git 信息、服务器代码或 `.mjs` 源码。解压后可直接打开首页，也可将文件上传到静态部署平台。需要目录上传的平台，选择 `dist/` 内的文件。
+
+GitHub Actions 在 `main` 更新后完成逻辑、交互和静态产物检查，发布 GitHub Pages，并提供名为 `qiyu-static-website` 的可下载上传包。静态产物检查覆盖根目录、子目录、移动端刷新、弹窗交互和直接打开首页，并验证页面不依赖外网资源。
+
+从 Actions 下载产物后，解开 GitHub 提供的外层归档，取出其中的 `qiyu-static.zip` 作为网站上传包。已解压的网站目录也可单独验证：`npm run test:static -- --directory /网站目录`。
 
 ## 文件结构
 
@@ -50,9 +67,12 @@ assets/
   fonts/        本地中文字体与 OFL 授权
 scripts/
   serve.mjs     本地静态服务
-  build.mjs     静态发布打包
+  build.mjs     浏览器代码合并、资源指纹与纯静态构建
+  package-static.mjs  生成首页位于根目录的独立 ZIP
+  verify-static.mjs   发布产物的浏览器检查
 tests/
   domain.test.mjs
+  static-build.test.mjs  上传包结构、完整性与相对路径检查
   browser.mjs        多端页面与完整交互回归
 .github/workflows/deploy.yml
 ```

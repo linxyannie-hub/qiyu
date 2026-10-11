@@ -26,7 +26,14 @@ jobs:
       - run: npm test
       - run: npx playwright install --with-deps chromium
       - run: npm run test:browser
-      - run: npm run build
+      - run: npm run test:static
+      - run: npm run package:static -- --output "${{ runner.temp }}/qiyu-static.zip"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: qiyu-static-website
+          path: ${{ runner.temp }}/qiyu-static.zip
+          if-no-files-found: error
+          retention-days: 30
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:

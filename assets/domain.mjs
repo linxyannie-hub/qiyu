@@ -280,6 +280,11 @@ export function seed() {
         name: "禾伴动物医院",
         city: "上海",
         contact: "林晓",
+        surgeryScopes: ["眼科术后", "骨科术后", "复杂外科术后"],
+        followupContact: "林晓",
+        clinicalLead: "陈予安",
+        serviceHours: "09:00—18:00",
+        reviewPath: "禾伴动物医院院内复查，由林晓确认到院时间",
         status: "active",
       },
     ],
@@ -369,6 +374,223 @@ export const appointmentLabels = {
   completed: "已完成",
   cancelled: "已取消",
 };
+export function careLoopSummary(s, petId, at = iso()) {
+  const pet = petById(s, petId);
+  if (!pet) return null;
+  const plan = currentPlan(s, petId, at);
+  const latest = latestPlan(s, petId);
+  const concerns = s.concerns.filter((c) => c.petId === petId);
+  const open = concerns.filter((c) => c.status !== "resolved");
+  const appointments = s.appointments.filter((a) => a.petId === petId);
+  const active = appointments
+    .filter((a) => ["requested", "confirmed"].includes(a.status))
+    .sort((a, b) => `${a.date} ${a.time}`.localeCompare(`${b.date} ${b.time}`));
+  const completed =
+    appointments
+      .filter((a) => a.status === "completed")
+      .sort((a, b) =>
+        `${b.date} ${b.time}`.localeCompare(`${a.date} ${a.time}`),
+      )[0] || null;
+  const pendingChange = active.find((a) => a.replacesId) || null;
+  const appointment =
+    active.find((a) => a.status === "confirmed") || active[0] || completed;
+  const reviewStatus =
+    appointment?.status ||
+    (appointments.some((a) => a.status === "cancelled")
+      ? "cancelled"
+      : pet.review
+        ? "proposed"
+        : "none");
+  const review = {
+    status: reviewStatus,
+    label: {
+      none: "尚未安排",
+      proposed: "建议日期待确认",
+      ...appointmentLabels,
+    }[reviewStatus],
+    appointment,
+    pendingChange,
+    completed,
+  };
+  const futurePlan = s.plans.some(
+    (p) => p.petId === petId && p.status === "published" && p.effectiveAt > at,
+  );
+  const unfinishedPlan = s.plans.some(
+    (p) =>
+      p.petId === petId && ["draft", "review", "returned"].includes(p.status),
+  );
+  const blockers = [];
+  if (!plan) blockers.push("正式照护安排尚未发布");
+  if (!pet.accepted) blockers.push("家庭尚未接收本轮照护");
+  if (open.length) blockers.push(`仍有 ${open.length} 项未结求助`);
+  if (active.length) blockers.push("复查预约仍待确认或尚未完成");
+  if (!completed) blockers.push("尚未记录完成本轮复查");
+  if (futurePlan) blockers.push("仍有尚未生效的照护安排");
+  if (unfinishedPlan)
+    blockers.push("仍有未处理的照护草稿或审核安排，请先审核或明确撤销");
+  let stage = "care",
+    stageLabel = "家庭按正式安排照护",
+    owner = pet.member,
+    ownerRole = "family",
+    nextStep = "按医院正式安排执行，遇到困难及时报告本院。";
+  if (pet.status === "ended") {
+    stage = "closed";
+    stageLabel = "本轮资料已交付";
+    owner = s.clinic.contact;
+    ownerRole = "clinic";
+    nextStep = pet.endReason || "查看本轮资料与院方交付的后续说明。";
+  } else if (!plan) {
+    stage = "preparation";
+    stageLabel =
+      latest?.status === "review" ? "待医生核对出院交付" : "出院交付准备中";
+    ownerRole = latest?.status === "review" ? "doctor" : "clinic";
+    owner = ownerRole === "doctor" ? roles.doctor.person : s.clinic.contact;
+    nextStep =
+      latest?.status === "review"
+        ? "核对出院材料、照护事项与建议复查，发布正式安排。"
+        : "依据本院出院材料完善照护草稿，提交医生核对。";
+  } else if (!pet.accepted) {
+    stage = "receipt";
+    stageLabel = "待家庭接收出院安排";
+    owner = pet.owner;
+    nextStep = "核对本轮照护安排、医院联系路径与复查建议，确认接收。";
+  } else if (open.length) {
+    const priority = {
+      new: 0,
+      clinical: 1,
+      accepted: 2,
+      supplement: 3,
+      answered: 4,
+      action: 5,
+    };
+    const focus = [...open].sort(
+      (a, b) => (priority[a.status] ?? 6) - (priority[b.status] ?? 6),
+    )[0];
+    if (["new", "clinical", "accepted"].includes(focus.status)) {
+      stage = "support";
+      stageLabel =
+        focus.status === "new"
+          ? "等待原医院接手"
+          : focus.status === "clinical"
+            ? "院方已接手，待专业下一步"
+            : "院方已接手，核对实际困难";
+      owner = focus.assignee || s.clinic.contact;
+      ownerRole =
+        focus.assigneeRole ||
+        (focus.assignee === roles.doctor.person ? "doctor" : "clinic");
+      nextStep =
+        focus.status === "new"
+          ? `接收“${focus.title}”，明确负责人与跟进方式。`
+          : focus.status === "clinical"
+            ? `结合家庭事实核对“${focus.title}”，交付明确的专业下一步。`
+            : `核对“${focus.title}”的执行事实，必要时转交主治医生。`;
+    } else {
+      stage = "action";
+      stageLabel =
+        focus.status === "supplement"
+          ? "待家庭补充执行事实"
+          : focus.status === "answered"
+            ? "待家庭确认下一步"
+            : "家庭正在落实后续行动";
+      owner = pet.member;
+      nextStep =
+        focus.status === "supplement"
+          ? focus.messages.at(-1)?.text || "按院方请求补充实际情况。"
+          : focus.nextAction || "查看医院交付的后续安排。";
+    }
+  } else if (active.length || !completed) {
+    stage = "review";
+    if (reviewStatus === "confirmed") {
+      stageLabel = pendingChange ? "原复查保留，改期待确认" : "复查时间已确认";
+      nextStep = pendingChange
+        ? "院方确认改期前，原复查预约继续保留。"
+        : `按已确认时间到院复查：${appointment.date} ${appointment.time}。`;
+    } else {
+      stageLabel =
+        reviewStatus === "requested"
+          ? "复查申请待院方确认"
+          : "待落实本轮复查安排";
+      ownerRole = reviewStatus === "requested" ? "clinic" : "family";
+      owner = ownerRole === "clinic" ? s.clinic.contact : pet.member;
+      nextStep =
+        reviewStatus === "requested"
+          ? "核对复查时间并向家庭确认预约。"
+          : "联系本院确认复查时间；建议日期尚不是正式预约。";
+    }
+  } else {
+    stage = "closure";
+    stageLabel = "复查已登记，待本轮交付";
+    owner =
+      futurePlan || unfinishedPlan ? roles.doctor.person : s.clinic.contact;
+    ownerRole = futurePlan || unfinishedPlan ? "doctor" : "clinic";
+    nextStep = unfinishedPlan
+      ? "请主治医生先核对未交付的草稿或审核安排，完成审核或记录原因撤销后，再交付本轮资料。"
+      : futurePlan
+        ? "请主治医生先核对尚未生效的安排，再确认本轮后续交付。"
+        : completed.nextAction || "核对未结事项与后续说明，交付本轮资料。";
+  }
+  const handoffDone =
+    concerns.length > 0 && concerns.every((c) => c.acceptedAt || c.assignee);
+  const currentKey = {
+    preparation: "preparation",
+    receipt: "receipt",
+    support: handoffDone ? "action" : "support",
+    action: "action",
+    care: "action",
+    review: "review",
+    closure: "closed",
+    closed: "closed",
+  }[stage];
+  const steps = [
+    { key: "preparation", label: "出院交付", done: Boolean(plan) },
+    { key: "receipt", label: "家庭接收", done: Boolean(pet.accepted) },
+    {
+      key: "support",
+      label: concerns.length ? "院方接手" : "按需院方接手",
+      optional: !concerns.length,
+      done: handoffDone,
+    },
+    {
+      key: "action",
+      label: concerns.length ? "下一步落实" : "按需后续行动",
+      optional: !concerns.length,
+      done:
+        concerns.length > 0 &&
+        concerns.every(
+          (c) => c.status === "resolved" && c.closeReason && c.nextAction,
+        ),
+    },
+    {
+      key: "review",
+      label: "到院复查",
+      done: !active.length && Boolean(completed),
+    },
+    { key: "closed", label: "本轮交付", done: pet.status === "ended" },
+  ].map(({ key, label, done, optional }) => ({
+    key,
+    label,
+    status: optional
+      ? "optional"
+      : done
+        ? "done"
+        : key === currentKey
+          ? "current"
+          : "pending",
+  }));
+  return {
+    petId,
+    stage,
+    stageLabel,
+    owner,
+    ownerRole,
+    nextStep,
+    openCount: open.length,
+    review,
+    readyToEnd: pet.status !== "ended" && blockers.length === 0,
+    blockers,
+    steps,
+  };
+}
 export function normalizeState(s) {
   s.refunds ||= [];
   if (s.clinic.city === "杭州 · 滨江") s.clinic.city = "上海";
@@ -478,6 +700,44 @@ function required(v, msg) {
   if (!String(v ?? "").trim()) throw new Error(msg);
   return String(v).trim();
 }
+function validateAppointmentTime(date, time) {
+  if (
+    !/^\d{4}-\d{2}-\d{2}$/.test(date || "") ||
+    Number.isNaN(Date.parse(`${date}T00:00:00+08:00`)) ||
+    new Date(`${date}T00:00:00Z`).toISOString().slice(0, 10) !== date ||
+    date < day() ||
+    !/^([01]\d|2[0-3]):[0-5]\d$/.test(time || "")
+  )
+    throw new Error("请选择有效的复查日期与时间。");
+}
+const surgeryScopes = ["眼科术后", "骨科术后", "复杂外科术后"];
+function institutionProfile(values) {
+  return {
+    surgeryScopes: [
+      ...new Set(
+        (Array.isArray(values.surgeryScopes)
+          ? values.surgeryScopes
+          : []
+        ).filter((scene) => surgeryScopes.includes(scene)),
+      ),
+    ],
+    followupContact: String(values.followupContact || "").trim(),
+    clinicalLead: String(values.clinicalLead || "").trim(),
+    serviceHours: String(values.serviceHours || "").trim(),
+    reviewPath: String(values.reviewPath || "").trim(),
+  };
+}
+function validateInstitutionProfile(c) {
+  if (!c.surgeryScopes?.some((scene) => surgeryScopes.includes(scene)))
+    throw new Error("请至少确认一种复杂术后照护场景。");
+  for (const [key, label] of [
+    ["followupContact", "随访协调员"],
+    ["clinicalLead", "临床负责人"],
+    ["serviceHours", "服务时间"],
+    ["reviewPath", "院内复查联系路径"],
+  ])
+    required(c[key], `请补齐${label}后再开通机构。`);
+}
 function createConcern(
   s,
   petId,
@@ -562,9 +822,21 @@ export function transition(
   const p = action.petId ? petById(s, action.petId) : null;
   let message = "已保存";
   let entity = null;
+  const requireFamilyPet = (pet) => {
+    if (role !== "family") return;
+    if (
+      !pet?.members.some(
+        (m) =>
+          m.active && (!m.expires || m.expires >= day()) && m.name === actor,
+      )
+    )
+      throw new Error("当前照护者没有本轮服务的授权。");
+  };
   const concern = () => {
     const c = s.concerns.find((c) => c.id === action.id);
     if (!c) throw new Error("未找到该问题，请刷新后重试。");
+    if (petById(s, c.petId)?.status === "ended")
+      throw new Error("本轮已结束，请联系本院确认新的跟进安排。");
     if (role === "family") {
       const pet = petById(s, c.petId);
       if (
@@ -584,6 +856,7 @@ export function transition(
       if (p.status === "ended")
         throw new Error("本轮已结束，请查看已交付资料。");
       if (!currentPlan(s, p.id)) throw new Error("医院尚未发布正式安排。");
+      requireFamilyPet(p);
       p.accepted = true;
       p.status = "active";
       message = "已接收本轮照护服务";
@@ -758,6 +1031,7 @@ export function transition(
         const c = concern();
         if (["resolved", "new"].includes(c.status))
           throw new Error("当前状态不可请求补充。");
+        if (c.status !== "supplement") c.resumeStatus = c.status;
         c.status = "supplement";
         c.messages.push({
           actor,
@@ -785,8 +1059,14 @@ export function transition(
           )
         )
           throw new Error("照护授权已失效。");
-        if (c.status === "supplement")
-          c.status = c.assigneeRole === "doctor" ? "clinical" : "accepted";
+        if (c.status === "supplement") {
+          c.status = ["answered", "action"].includes(c.resumeStatus)
+            ? c.resumeStatus
+            : c.assigneeRole === "doctor"
+              ? "clinical"
+              : "accepted";
+          delete c.resumeStatus;
+        }
       } else {
         requireRole(role, ["clinic", "doctor"]);
         if (c.status === "new") throw new Error("请先接手问题。");
@@ -794,6 +1074,11 @@ export function transition(
           throw new Error("此问题需要兽医专业答复，请转交医生。");
         c.status = "answered";
         c.nextAction = required(action.nextAction, "请填写明确的后续动作。");
+        c.answeredAt = iso();
+        c.answeredBy = actor;
+        delete c.resumeStatus;
+        delete c.actionAcknowledgedAt;
+        delete c.actionAcknowledgedBy;
       }
       c.messages.push({ actor, role, text, at: iso() });
       message = role === "family" ? "补充信息已发送" : "答复与后续安排已交付";
@@ -806,6 +1091,8 @@ export function transition(
         if (c.status !== "answered")
           throw new Error("请先查看医院的专业答复。");
         c.status = "action";
+        c.actionAcknowledgedAt = iso();
+        c.actionAcknowledgedBy = actor;
         c.messages.push({
           actor,
           role,
@@ -829,7 +1116,8 @@ export function transition(
           throw new Error("请选择本院已配置的接手人员");
         c.assignee = name;
         c.assigneeRole = name === roles.doctor.person ? "doctor" : "clinic";
-        c.status = c.assigneeRole === "doctor" ? "clinical" : "accepted";
+        if (!["answered", "action", "supplement"].includes(c.status))
+          c.status = c.assigneeRole === "doctor" ? "clinical" : "accepted";
         c.acceptedAt ||= iso();
         c.messages.push({
           actor,
@@ -846,9 +1134,22 @@ export function transition(
         const c = concern();
         if (!["answered", "action"].includes(c.status))
           throw new Error("问题须有答复或后续行动后才能解决。");
+        if (role === "family" && c.status !== "action")
+          throw new Error("请先确认医院的后续安排，再记录实际行动结果。");
         c.status = "resolved";
         c.closedAt = iso();
-        c.closeReason = action.reason || "已确认处理结果";
+        c.closedBy = actor;
+        c.closedRole = role;
+        c.closeReason = required(
+          action.reason,
+          "请记录实际完成的行动或处理结果。",
+        );
+        c.messages.push({
+          actor,
+          role,
+          text: `已记录处理结果：${c.closeReason}`,
+          at: c.closedAt,
+        });
         message = "问题已解决";
       }
       break;
@@ -857,6 +1158,8 @@ export function transition(
       {
         const c = concern();
         if (c.status !== "resolved") throw new Error("此问题尚未关闭。");
+        if (petById(s, c.petId)?.status === "ended")
+          throw new Error("本轮已结束，请联系本院确认新的跟进安排。");
         c.status =
           c.assigneeRole === "doctor"
             ? "clinical"
@@ -866,6 +1169,11 @@ export function transition(
         c.nextAction = "";
         delete c.closedAt;
         delete c.closeReason;
+        delete c.closedBy;
+        delete c.closedRole;
+        delete c.actionAcknowledgedAt;
+        delete c.actionAcknowledgedBy;
+        delete c.resumeStatus;
         c.messages.push({
           actor,
           role,
@@ -934,6 +1242,8 @@ export function transition(
         const plan = s.plans.find((pl) => pl.id === action.id);
         if (!plan || !["draft", "returned"].includes(plan.status))
           throw new Error("只有草稿可以编辑。");
+        if (petById(s, plan.petId)?.status === "ended")
+          throw new Error("本轮已结束，不能继续编辑出院安排。");
         validateItems(action.items);
         plan.items = action.items;
         plan.source = required(action.source, "请填写来源");
@@ -949,6 +1259,8 @@ export function transition(
         const plan = s.plans.find((pl) => pl.id === action.id);
         if (!plan || !["draft", "returned"].includes(plan.status))
           throw new Error("当前计划不能提交审核。");
+        if (petById(s, plan.petId)?.status === "ended")
+          throw new Error("本轮已结束，不能继续提交出院安排。");
         validateItems(plan.items);
         plan.status = "review";
         message = "已提交医生审核";
@@ -960,6 +1272,8 @@ export function transition(
         const plan = s.plans.find((pl) => pl.id === action.id);
         if (plan?.status !== "review")
           throw new Error("当前计划不在审核队列。");
+        if (petById(s, plan.petId)?.status === "ended")
+          throw new Error("本轮已结束，不能继续审核出院安排。");
         plan.status = "returned";
         plan.returnReason = required(action.reason, "请填写退回原因。");
         message = "已退回护理人员补充";
@@ -971,6 +1285,8 @@ export function transition(
         const plan = s.plans.find((pl) => pl.id === action.id);
         if (plan?.status !== "review")
           throw new Error("只有待审核的计划可以发布。");
+        if (petById(s, plan.petId)?.status === "ended")
+          throw new Error("本轮已结束，不能继续发布出院安排。");
         validateItems(plan.items);
         plan.status = "published";
         plan.publishedAt = iso();
@@ -1031,16 +1347,28 @@ export function transition(
         entity = plan.id;
       }
       break;
+    case "withdrawPlan":
     case "withdrawFuturePlan":
       requireRole(role, ["doctor"]);
       {
         const pl = s.plans.find((pl) => pl.id === action.id);
-        if (!pl || pl.status !== "published" || pl.effectiveAt <= iso())
-          throw new Error("只有尚未生效的安排可以撤销");
+        if (
+          !pl ||
+          !(
+            ["draft", "review", "returned"].includes(pl.status) ||
+            (pl.status === "published" && pl.effectiveAt > iso())
+          )
+        )
+          throw new Error("只有未正式交付或尚未生效的安排可以撤销");
+        if (petById(s, pl.petId)?.status === "ended")
+          throw new Error("本轮已结束，未交付安排仅保留历史，不再变更。");
         pl.status = "withdrawn";
         pl.withdrawReason = required(action.reason, "请填写撤销原因");
         pl.withdrawnAt = iso();
-        message = "待生效安排已撤销，当前安排继续有效";
+        pl.withdrawnBy = actor;
+        message = currentPlan(s, pl.petId)
+          ? "未生效安排已撤销，当前正式安排继续有效"
+          : "未交付安排已撤销，内容与撤销说明已保留";
       }
       break;
     case "invite":
@@ -1112,8 +1440,18 @@ export function transition(
     case "appointment":
       requireRole(role, ["family", "clinic"]);
       if (!p || p.status === "ended") throw new Error("当前服务不可申请复查");
-      if (!action.date || action.date < day())
-        throw new Error("请选择今天或之后的日期");
+      requireFamilyPet(p);
+      validateAppointmentTime(action.date, action.time || "10:00");
+      if (
+        s.appointments.some(
+          (a) =>
+            a.petId === p.id &&
+            a.date === action.date &&
+            a.time === (action.time || "10:00") &&
+            ["requested", "confirmed"].includes(a.status),
+        )
+      )
+        throw new Error("该复查时间已有有效预约或待确认申请，请查看原预约。");
       s.appointments.push({
         id: uid("appt"),
         petId: p.id,
@@ -1130,12 +1468,20 @@ export function transition(
       const previous = s.appointments.find((a) => a.id === action.id);
       if (!previous || !["confirmed", "requested"].includes(previous.status))
         throw new Error("当前预约不能改约。");
+      validateAppointmentTime(action.date, action.time);
+      if (previous.date === action.date && previous.time === action.time)
+        throw new Error("新时间与原预约相同，请选择实际需要调整的时间。");
       if (
-        !action.date ||
-        action.date < day() ||
-        !/^([01]\d|2[0-3]):[0-5]\d$/.test(action.time)
+        s.appointments.some(
+          (a) =>
+            a.id !== previous.id &&
+            a.petId === previous.petId &&
+            a.date === action.date &&
+            a.time === action.time &&
+            ["requested", "confirmed"].includes(a.status),
+        )
       )
-        throw new Error("请选择有效的复查时间。");
+        throw new Error("新复查时间已有有效预约或申请，请核对原预约。");
       if (
         s.appointments.some(
           (a) => a.replacesId === previous.id && a.status === "requested",
@@ -1144,6 +1490,7 @@ export function transition(
         throw new Error("已有待确认的改约申请，请等待院方处理。");
       const pet = petById(s, previous.petId);
       if (pet.status === "ended") throw new Error("本轮已结束，无法改约。");
+      requireFamilyPet(pet);
       const changed = {
         id: uid("appt"),
         petId: previous.petId,
@@ -1166,16 +1513,26 @@ export function transition(
       break;
     }
     case "appointmentStatus":
-      requireRole(role, ["clinic", "family"]);
+      requireRole(role, ["clinic", "doctor", "family"]);
       {
         const a = s.appointments.find((a) => a.id === action.id);
         if (!a) throw new Error("未找到预约");
+        const pet = petById(s, a.petId);
+        if (!pet || pet.status === "ended")
+          throw new Error("本轮已结束，复查记录不能继续变更。");
+        requireFamilyPet(pet);
         if (role === "family" && action.status !== "cancelled")
           throw new Error("预约需要医院确认");
+        if (role === "doctor" && action.status !== "completed")
+          throw new Error("预约时间由本院随访协调员确认。");
         if (!["confirmed", "completed", "cancelled"].includes(action.status))
           throw new Error("预约状态无效");
         if (action.status === "completed" && a.status !== "confirmed")
           throw new Error("需先确认复查");
+        if (action.status === "completed" && a.date > day())
+          throw new Error(
+            "不能登记未来预约已完成复查，请先核对实际到院日期并调整预约。",
+          );
         if (a.status === "completed" || a.status === "cancelled")
           throw new Error("当前预约已结束");
         if (action.status === "confirmed" && a.replacesId) {
@@ -1187,6 +1544,21 @@ export function transition(
           )
             throw new Error("原复查已结束，请重新申请复查。");
         }
+        if (
+          action.status === "confirmed" &&
+          s.appointments.some(
+            (x) =>
+              x.id !== a.id &&
+              x.id !== a.replacesId &&
+              x.petId === a.petId &&
+              x.date === a.date &&
+              x.time === a.time &&
+              ["requested", "confirmed"].includes(x.status),
+          )
+        )
+          throw new Error(
+            "该复查时间已存在其他有效预约或申请，请先核对重复记录。",
+          );
         a.status = action.status;
         if (a.status === "confirmed") {
           if (a.replacesId) {
@@ -1198,7 +1570,19 @@ export function transition(
           }
           petById(s, a.petId).review = a.date;
         }
-        if (a.status === "completed") a.completedAt = iso();
+        if (a.status === "completed") {
+          a.completedAt = iso();
+          a.reviewNote = required(
+            action.reviewNote || action.note,
+            "请记录本次到院复查与资料交付情况。",
+          );
+          a.nextAction = required(
+            action.nextAction,
+            "请记录院方已交付的后续安排。",
+          );
+          a.completedBy = actor;
+          a.completedRole = role;
+        }
         if (["completed", "cancelled"].includes(a.status)) {
           for (const pending of s.appointments.filter(
             (x) => x.replacesId === a.id && x.status === "requested",
@@ -1218,9 +1602,56 @@ export function transition(
       if (!p || p.status === "ended") throw new Error("服务已经结束");
       if (s.concerns.some((c) => c.petId === p.id && c.status !== "resolved"))
         throw new Error("请先处理未结问题或完成明确转交。");
+      {
+        const types = [
+          "完成本轮随访",
+          "转入新一轮服务",
+          "转院并完成交接",
+          "主人退出服务",
+        ];
+        const endType =
+          action.endType ||
+          types.find((type) => action.reason?.startsWith(type)) ||
+          "完成本轮随访";
+        if (!types.includes(endType))
+          throw new Error("请选择明确的本轮结束方式。");
+        const reason = required(action.reason, "请填写服务结束原因及下一步。");
+        if (endType === "完成本轮随访") {
+          const loop = careLoopSummary(s, p.id);
+          if (!loop.readyToEnd)
+            throw new Error(
+              `请先完成本轮交付条件：${loop.blockers.join("；")}。`,
+            );
+        } else {
+          for (const a of s.appointments.filter(
+            (a) =>
+              a.petId === p.id && ["requested", "confirmed"].includes(a.status),
+          )) {
+            a.status = "cancelled";
+            a.cancelReason = `本轮${endType}，原预约撤销；${reason}`;
+          }
+          for (const pl of s.plans.filter(
+            (pl) =>
+              pl.petId === p.id &&
+              (["draft", "review", "returned"].includes(pl.status) ||
+                (pl.status === "published" && pl.effectiveAt > iso())),
+          )) {
+            pl.status = "withdrawn";
+            pl.withdrawnAt = iso();
+            pl.withdrawReason = `本轮${endType}，未生效安排停止交付；${reason}`;
+          }
+        }
+        p.endType = endType;
+        p.endReason = reason;
+      }
       p.status = "ended";
       p.endedAt = iso();
-      p.endReason = required(action.reason, "请填写服务结束原因及下一步。");
+      for (const t of s.tasks.filter(
+        (t) =>
+          t.petId === p.id &&
+          Date.parse(`${t.date}T${t.time}:00+08:00`) >= Date.now(),
+      ))
+        t.cancelled = true;
       message = "本轮服务已结束，资料可继续获取";
       break;
     case "editPet":
@@ -1254,6 +1685,14 @@ export function transition(
       )
         throw new Error("接单目标需为1—1440分钟");
       s.clinic = { ...s.clinic, ...action.values };
+      {
+        const main = s.institutions.find((c) => c.id === "clinic-1");
+        if (main) {
+          main.name = s.clinic.name;
+          main.followupContact = s.clinic.contact;
+          main.serviceHours = s.clinic.hours;
+        }
+      }
       message = "服务设置已保存";
       break;
     case "institution":
@@ -1263,9 +1702,29 @@ export function transition(
         name: required(action.name, "请填写机构名称"),
         city: required(action.city, "请填写城市"),
         contact: required(action.contact, "请填写负责人"),
+        ...institutionProfile(action),
         status: "onboarding",
       });
       message = "机构已建立，进入实施流程";
+      break;
+    case "institutionProfile":
+      requireRole(role, ["ops"]);
+      {
+        const c = s.institutions.find((c) => c.id === action.id);
+        if (!c) throw new Error("未找到机构，请重新查看。");
+        const values = institutionProfile(action);
+        validateInstitutionProfile(values);
+        Object.assign(c, values);
+        if (action.name !== undefined)
+          c.name = required(action.name, "请填写机构名称。");
+        if (c.id === "clinic-1") {
+          s.clinic.name = c.name;
+          s.clinic.contact = c.followupContact;
+          s.clinic.hours = c.serviceHours;
+        }
+        c.profileUpdatedAt = iso();
+        message = "复杂术后服务配置已保存";
+      }
       break;
     case "activateInstitution":
       requireRole(role, ["ops"]);
@@ -1273,7 +1732,19 @@ export function transition(
         const c = s.institutions.find((c) => c.id === action.id);
         if (!c || c.status !== "onboarding")
           throw new Error("机构已经开通或不存在");
+        validateInstitutionProfile(c);
+        const checks = ["handoff", "instructions", "familyPath", "reviewPath"];
+        if (
+          !Array.isArray(action.checks) ||
+          !checks.every((check) => action.checks.includes(check))
+        )
+          throw new Error(
+            "请完成接手人员、出院交付、家庭求助与复查路径的实施验收。",
+          );
         c.status = "active";
+        c.activatedAt = iso();
+        c.activatedBy = actor;
+        c.implementationChecks = [...checks];
         message = "机构已开通";
       }
       break;

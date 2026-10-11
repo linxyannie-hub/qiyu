@@ -1,0 +1,573 @@
+/* One continuous postoperative service, with facts and responsibility visible. */
+.round-summary {
+  padding: 22px 24px;
+  margin-bottom: 24px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+.round-summary-head,
+.next-step-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.round-summary-head {
+  justify-content: space-between;
+  margin-bottom: 18px;
+}
+.round-summary-head h2 {
+  margin-top: 5px;
+  font-size: 20px;
+}
+.round-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 500;
+}
+.round-label .icon {
+  width: 16px;
+  height: 16px;
+}
+.closure-path {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0 0 18px;
+  padding: 0;
+  list-style: none;
+}
+.closure-step {
+  min-width: 0;
+}
+.closure-step > a,
+.closure-step > button,
+.closure-step .closure-static {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 28px 1fr;
+  align-content: start;
+  align-items: center;
+  column-gap: 8px;
+  row-gap: 3px;
+  padding: 10px 8px;
+  border-radius: 10px;
+  text-align: left;
+  font-size: 13px;
+  color: var(--muted);
+  min-height: 66px;
+}
+.closure-step > a:hover,
+.closure-step > button:hover {
+  background: var(--bg);
+}
+.closure-number {
+  display: grid;
+  place-items: center;
+  grid-row: span 2;
+  height: 28px;
+  width: 28px;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  font-size: 12px;
+  font-weight: 650;
+  background: var(--bg);
+}
+.closure-number .icon {
+  width: 15px;
+  height: 15px;
+}
+.closure-step small {
+  font-size: 11px;
+}
+.closure-step.done .closure-number {
+  color: var(--green);
+  border-color: var(--mint);
+  background: var(--mint);
+}
+.closure-step.current > a,
+.closure-step.current > button {
+  color: var(--green-dark);
+  background: var(--mint);
+  font-weight: 600;
+}
+.closure-step.current .closure-number {
+  background: var(--green);
+  color: var(--surface);
+  border-color: var(--green);
+}
+.closure-step.current small {
+  color: var(--green);
+  font-weight: 400;
+}
+.closure-step.optional {
+  opacity: 0.8;
+}
+.next-step-card {
+  padding: 14px 16px;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+}
+.next-step-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  color: var(--green);
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  background: var(--mint);
+}
+.next-step-card > div {
+  min-width: 0;
+  flex: 1;
+}
+.next-step-card small {
+  display: block;
+  margin-bottom: 3px;
+}
+.next-step-card strong {
+  display: block;
+  font-size: 14px;
+  font-weight: 550;
+  line-height: 1.65;
+  overflow-wrap: anywhere;
+}
+.next-step-card > .text-btn {
+  min-width: 44px;
+  min-height: 44px;
+  justify-content: center;
+}
+.queue-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin: 0 0 20px;
+}
+.card > .queue-summary {
+  margin: 0;
+  padding: 0 22px 12px;
+  gap: 9px;
+}
+.queue-summary-item {
+  padding: 15px 16px;
+  text-align: left;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  border-radius: 12px;
+  min-width: 0;
+}
+.card .queue-summary-item {
+  padding: 10px 12px;
+  background: var(--bg);
+}
+.queue-summary-item > span {
+  display: flex;
+  gap: 7px;
+  align-items: center;
+  color: var(--text);
+  font-size: 12px;
+}
+.queue-summary-item .icon {
+  width: 16px;
+  height: 16px;
+  color: var(--green);
+}
+.queue-summary-item strong {
+  display: block;
+  margin-top: 7px;
+  font-size: 24px;
+  font-weight: 550;
+  line-height: 1.4;
+}
+.queue-summary-item strong small {
+  margin-left: 6px;
+  font-size: 12px;
+  font-weight: 400;
+}
+.queue-summary-item:hover,
+.queue-summary-item.selected {
+  border-color: var(--green);
+  background: var(--mint);
+}
+.handoff-context {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px 20px;
+  padding: 17px;
+  margin-top: 17px;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+}
+.handoff-context > div {
+  min-width: 0;
+}
+.handoff-context small,
+.handoff-context strong {
+  display: block;
+}
+.handoff-context strong {
+  font-size: 13px;
+  font-weight: 500;
+  margin-top: 3px;
+  overflow-wrap: anywhere;
+}
+.handoff-context .text-btn {
+  min-height: 44px;
+  font-size: 12px;
+}
+.service-fit {
+  display: grid;
+  grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr);
+  gap: 28px;
+  padding: 22px 24px;
+  margin-bottom: 24px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+.service-fit h2 {
+  margin-top: 8px;
+  font-size: 18px;
+}
+.service-fit p {
+  margin-top: 8px;
+  font-size: 13px;
+  line-height: 1.75;
+  max-width: 580px;
+}
+.fit-points {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  justify-content: center;
+}
+.fit-points span {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  color: var(--text);
+  font-size: 13px;
+}
+.fit-points .icon {
+  width: 18px;
+  height: 18px;
+  color: var(--green);
+}
+.commercial-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 16px 20px;
+  background: var(--mint);
+  border-radius: 12px;
+  margin: 18px 0;
+}
+.commercial-note > .icon {
+  color: var(--green);
+  margin-top: 3px;
+}
+.commercial-note strong {
+  font-size: 14px;
+  font-weight: 550;
+}
+.commercial-note p {
+  font-size: 12px;
+  margin-top: 3px;
+  color: var(--text);
+  line-height: 1.75;
+}
+.review-delivery {
+  padding: 14px 15px;
+  margin: 12px 0;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 11px;
+}
+.review-delivery b,
+.review-delivery strong {
+  display: block;
+  font-size: 13px;
+  font-weight: 550;
+}
+.review-delivery b .icon {
+  width: 16px;
+  height: 16px;
+  margin-right: 5px;
+}
+.review-delivery p {
+  font-size: 13px;
+  line-height: 1.75;
+  margin: 5px 0 10px;
+  white-space: pre-wrap;
+}
+.review-delivery small {
+  display: block;
+  margin-top: 8px;
+}
+.next-action-notice p {
+  font-size: 12px;
+  margin-top: 8px;
+}
+.scope-field {
+  border: 1px solid var(--line);
+  padding: 12px 16px;
+  border-radius: 10px;
+  margin: 0;
+}
+.scope-field legend {
+  padding: 0 7px;
+  color: var(--text);
+  font-size: 13px;
+}
+.scope-field .checkbox {
+  min-height: 44px;
+  margin: 0;
+}
+.review-back {
+  min-height: 44px;
+  margin-bottom: 6px;
+}
+.phone-screen .family-greeting {
+  min-height: 0;
+  padding: 14px 78px 16px 16px;
+  margin-bottom: 4px;
+}
+.phone-screen .family-greeting h1 {
+  font-size: 22px;
+  margin-top: 4px;
+  line-height: 1.4;
+  max-width: 100%;
+}
+.phone-screen .family-greeting p {
+  font-size: 12px;
+  margin-top: 6px;
+  max-width: 100%;
+}
+.phone-screen .family-greeting > .pet-art {
+  width: 61px;
+  height: 61px;
+  top: 18px;
+  right: 12px;
+  bottom: auto;
+}
+.phone-screen .round-summary {
+  padding: 16px;
+  margin-bottom: 16px;
+}
+.phone-screen .round-summary-head {
+  gap: 9px;
+  margin-bottom: 12px;
+  align-items: flex-start;
+}
+.phone-screen .round-summary-head h2 {
+  font-size: 17px;
+  line-height: 1.5;
+}
+.phone-screen .round-summary-head .badge {
+  font-size: 10px;
+  padding: 3px 7px;
+  white-space: nowrap;
+}
+.phone-screen .closure-path {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 5px;
+  margin-bottom: 12px;
+}
+.phone-screen .closure-step > a,
+.phone-screen .closure-step > button,
+.phone-screen .closure-static {
+  min-height: 56px;
+  padding: 7px 6px;
+  gap: 4px;
+  grid-template-columns: 20px 1fr;
+  font-size: 11px;
+}
+.phone-screen .closure-number {
+  width: 20px;
+  height: 20px;
+  font-size: 10px;
+}
+.phone-screen .closure-number .icon {
+  width: 12px;
+  height: 12px;
+}
+.phone-screen .closure-step small {
+  font-size: 10px;
+}
+.phone-screen .next-step-card {
+  gap: 9px;
+  padding: 11px 10px;
+}
+.phone-screen .next-step-icon {
+  width: 29px;
+  height: 29px;
+  border-radius: 8px;
+}
+.phone-screen .next-step-icon .icon {
+  width: 17px;
+  height: 17px;
+}
+.phone-screen .next-step-card small {
+  font-size: 11px;
+}
+.phone-screen .next-step-card strong {
+  font-size: 12px;
+}
+.phone-screen .next-step-card > .text-btn {
+  min-width: 30px;
+  padding: 0;
+}
+.phone-screen .family-followup-strip {
+  margin: 0 0 16px;
+}
+.phone-screen .handoff-context {
+  font-size: 12px;
+}
+@media (max-width: 1150px) {
+  .card > .queue-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .closure-path {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+@media (max-width: 768px) {
+  .round-summary {
+    padding: 18px;
+  }
+  .round-summary-head h2 {
+    font-size: 18px;
+  }
+  .queue-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+  .queue-summary-item {
+    padding: 12px;
+  }
+  .service-fit {
+    grid-template-columns: 1fr;
+    gap: 16px;
+    padding: 19px;
+  }
+  .commercial-note {
+    padding: 14px 16px;
+  }
+}
+@media (max-width: 400px) {
+  .closure-step > a,
+  .closure-step > button,
+  .closure-static {
+    column-gap: 5px;
+    padding: 8px 4px;
+    font-size: 12px;
+  }
+  .closure-number {
+    width: 24px;
+    height: 24px;
+  }
+  .closure-step small {
+    font-size: 10px;
+  }
+  .next-step-card {
+    padding: 12px;
+    gap: 10px;
+  }
+  .handoff-context {
+    padding: 12px;
+    gap: 10px;
+  }
+}
+
+.phone-screen .family-greeting .eyebrow {
+  margin-bottom: 2px;
+}
+.phone-screen .family-greeting {
+  margin-bottom: 12px;
+  padding: 14px 16px 16px;
+}
+.phone-screen .family-greeting > .pet-art {
+  display: none;
+}
+.phone-screen .family-greeting h1 {
+  font-size: 20px;
+}
+.phone-screen .round-summary.compact .round-label {
+  display: none;
+}
+.phone-screen .round-summary.compact .round-summary-head {
+  margin-bottom: 8px;
+}
+.phone-screen .round-summary.compact .round-summary-head h2 {
+  margin-top: 0;
+  font-size: 15px;
+}
+.phone-screen .round-summary.compact .closure-step > button,
+.phone-screen .round-summary.compact .closure-static {
+  min-height: 49px;
+  padding: 5px 4px;
+}
+.phone-screen .round-summary.compact .closure-step small {
+  display: none;
+}
+.phone-screen .round-summary.compact .closure-number {
+  grid-row: auto;
+}
+.phone-screen .round-summary.compact .closure-path {
+  margin-bottom: 9px;
+  gap: 2px 5px;
+}
+.phone-screen .round-summary.compact .next-step-card > .text-btn {
+  min-width: 44px;
+}
+.phone-screen .round-summary.compact .next-step-card strong {
+  font-size: 12px;
+  line-height: 1.65;
+}
+.phone-screen .task-card {
+  scroll-margin-top: 16px;
+}
+
+.unissued-plans {
+  padding: 15px;
+  margin-top: 16px;
+  background: var(--blue-bg);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+}
+.unissued-plans h3 {
+  display: flex;
+  gap: 7px;
+  align-items: center;
+  font-size: 14px;
+}
+.unissued-plans h3 .icon {
+  width: 17px;
+  height: 17px;
+}
+.unissued-plans p {
+  font-size: 12px;
+  margin: 5px 0 12px;
+  color: var(--text);
+}
+.unissued-plans .field-action {
+  padding-top: 10px;
+  margin-top: 10px;
+  border-top: 1px solid var(--line);
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.unissued-plans strong {
+  font-size: 13px;
+  font-weight: 550;
+}
+.unissued-plans small {
+  display: block;
+  margin-top: 3px;
+}

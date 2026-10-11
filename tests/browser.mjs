@@ -25,6 +25,10 @@ try {
   page.setDefaultTimeout(6000);
   const errors = [];
   page.on("pageerror", (e) => errors.push(e.message));
+  page.on("response", (response) => {
+    if (response.status() >= 400)
+      errors.push(`${response.status()} ${response.url()}`);
+  });
   const goto = async (route) => {
     await page.goto(base + "#/" + route);
     await page.waitForSelector("main");
@@ -76,9 +80,33 @@ try {
     "family/today/pet-1",
     "family/plan/pet-1",
     "family/messages/pet-1",
+    "family/review/pet-1",
     "family/me/pet-1",
     "family/today/pet-4",
+    "family/review/pet-4",
   ];
+  const workspacePages = {
+    clinic: new Set([
+      "dashboard",
+      "queue",
+      "pets",
+      "case",
+      "plans",
+      "appointments",
+      "reports",
+      "settings",
+      "support",
+    ]),
+    doctor: new Set(["dashboard", "clinical", "approvals", "pets", "case"]),
+    ops: new Set([
+      "dashboard",
+      "institutions",
+      "templates",
+      "billing",
+      "support",
+    ]),
+    family: new Set(["today", "plan", "messages", "me", "review"]),
+  };
   const actions = new Set(
     [
       ...(await readFile("assets/app.mjs", "utf8")).matchAll(
@@ -108,6 +136,17 @@ try {
         .locator("[data-action]")
         .evaluateAll((els) => els.map((e) => e.dataset.action)))
         assert.ok(actions.has(action), "缺失事件处理 " + action);
+      for (const target of await page
+        .locator('a[href^="#/"]')
+        .evaluateAll((links) =>
+          links.map((link) => link.getAttribute("href")),
+        )) {
+        const [targetRole, targetPage] = target.slice(2).split("/");
+        assert.ok(
+          workspacePages[targetRole]?.has(targetPage),
+          `无效页面入口 ${route}: ${target}`,
+        );
+      }
       inspected++;
       if (route.startsWith("family/")) {
         const bounds = await page.locator(".phone-screen").boundingBox();
@@ -174,6 +213,9 @@ try {
   await click("ack-action");
   assert.equal((await saved()).concerns[0].status, "action");
   await click("resolve");
+  await page
+    .locator("#dialog [name=reason]")
+    .fill("已联系本院，复查时间已确认");
   await submit();
   await click("concern-detail", "concern-1");
   await click("reopen");
@@ -290,6 +332,14 @@ try {
   assert.ok((await page.locator("main").innerText()).includes("续订已完成"));
   // New-round creation preserves the ended round and links the existing profile.
   await fresh("clinic/case/pet-3");
+  await click("complete-appointment", "appt-2");
+  await page
+    .locator("#dialog [name=note]")
+    .fill("已核对实际到院，本轮复查资料已交付家庭");
+  await page
+    .locator("#dialog [name=nextAction]")
+    .fill("院方确认本轮随访可以结束，后续需要协助时联系本院");
+  await submit();
   await click("end", "pet-3");
   await page.locator("#dialog [name=reason]").fill("完成本轮，后续另行交付");
   await submit();
@@ -302,6 +352,146 @@ try {
   s = await saved();
   assert.equal(s.pets.at(-1).previousServiceId, "pet-3");
   assert.equal(s.pets.find((p) => p.id === "pet-3").status, "ended");
+  // A difficulty travels through the original hospital and ends with review delivery.
+  await fresh("family/messages/pet-3");
+  await click("new-concern", "pet-3");
+  await page
+    .locator("#dialog [name=title]")
+    .fill("家庭操作遇到困难，需要院方核对");
+  await page
+    .locator("#dialog [name=body]")
+    .fill("家人交接后，不确定活动安排是否做到，希望原医院核对。");
+  await page.locator("#dialog [name=difficulty]").selectOption("不会操作");
+  await submit();
+  const loopConcern = (await saved()).concerns[0];
+  await goto("clinic/queue");
+  await click("concern-detail", loopConcern.id);
+  await click("claim", loopConcern.id);
+  assert.equal((await saved()).concerns[0].status, "accepted");
+  await click("escalate", loopConcern.id);
+  assert.equal((await saved()).concerns[0].status, "clinical");
+  await close();
+  await goto("doctor/clinical");
+  await click("concern-detail", loopConcern.id);
+  assert.match(await page.locator("#dialog").innerText(), /不会操作/);
+  await page
+    .locator("#dialog [name=text]")
+    .fill("已核对家庭报告与本院正式安排，院方会在复查时继续交付操作说明。");
+  await page
+    .locator("#dialog [name=nextAction]")
+    .fill("按已确认的本院复查时间到院，由随访负责人交接复查资料。");
+  await page.locator("#dialog [type=submit]").click();
+  assert.equal((await saved()).concerns[0].status, "answered");
+  await close();
+  await goto("family/messages/pet-3");
+  await click("concern-detail", loopConcern.id);
+  assert.equal(
+    await page.locator('#dialog [data-action="resolve"]').count(),
+    0,
+  );
+  await click("ack-action", loopConcern.id);
+  await click("resolve", loopConcern.id);
+  await page
+    .locator("#dialog [name=reason]")
+    .fill("已与本院负责人核对复查到院及资料交接安排。");
+  await submit();
+  assert.equal((await saved()).concerns[0].status, "resolved");
+  await goto("clinic/case/pet-3");
+  await click("complete-appointment", "appt-2");
+  await page
+    .locator("#dialog [name=note]")
+    .fill("已到院复查，家庭操作说明和本轮资料已交付。");
+  await page
+    .locator("#dialog [name=nextAction]")
+    .fill("院方确认本轮随访结束，后续需要协助时联系本院。");
+  await submit();
+  await goto("family/review/pet-3");
+  assert.match(
+    await page.locator("main").innerText(),
+    /家庭操作说明和本轮资料已交付/,
+  );
+  await goto("clinic/case/pet-3");
+  await click("end", "pet-3");
+  await page.locator("#dialog [name=endType]").selectOption("完成本轮随访");
+  await page
+    .locator("#dialog [name=reason]")
+    .fill("已完成本轮复查与资料交付，后续需要协助时联系本院。");
+  await submit();
+  await goto("family/review/pet-3");
+  assert.match(
+    await page.locator("main").innerText(),
+    /已完成本轮复查与资料交付/,
+  );
+  assert.equal(await page.locator('[data-action="appointment"]').count(), 0);
+  assert.equal(
+    (await saved()).activations.filter(
+      (activation) => activation.petId === "pet-3",
+    ).length,
+    1,
+  );
+  const deliveredDownload = page.waitForEvent("download");
+  await click("export-pet", "pet-3");
+  const deliveredHtml = await readFile(
+    await (await deliveredDownload).path(),
+    "utf8",
+  );
+  assert.match(deliveredHtml, /家庭操作说明和本轮资料已交付/);
+  assert.match(deliveredHtml, /已完成本轮复查与资料交付/);
+  for (const endedRoute of [
+    "family/plan/pet-3",
+    "family/messages/pet-3",
+    "doctor/case/pet-3",
+  ]) {
+    await goto(endedRoute);
+    for (const forbiddenAction of [
+      "revise",
+      "new-concern",
+      "reopen",
+      "approve",
+      "end",
+    ])
+      assert.equal(
+        await page.locator(`[data-action="${forbiddenAction}"]`).count(),
+        0,
+        `${endedRoute}: ${forbiddenAction}`,
+      );
+  }
+  // Institution eligibility, named owners and onboarding persist across operations pages.
+  await fresh("ops/institutions");
+  await click("new-institution");
+  for (const [name, value] of Object.entries({
+    name: "澄明动物医院",
+    city: "上海",
+    contact: "赵院长",
+    followupContact: "苏禾",
+    clinicalLead: "沈嘉",
+    serviceHours: "09:00—20:00",
+    reviewPath: "本院复查，由随访负责人确认到院与资料交接",
+  }))
+    await page.locator(`#dialog [name="${name}"]`).fill(value);
+  await page.locator("#dialog [type=submit]").click();
+  assert.match(
+    await page.locator("#dialog .form-error").innerText(),
+    /适用术后范围/,
+  );
+  await page.locator('#dialog [name="surgeryScope"][value="眼科术后"]').check();
+  await submit();
+  const eligibleClinic = (await saved()).institutions.at(-1);
+  assert.deepEqual(eligibleClinic.surgeryScopes, ["眼科术后"]);
+  assert.equal(eligibleClinic.status, "onboarding");
+  await click("activate-institution", eligibleClinic.id);
+  for (const checkbox of await page
+    .locator('#dialog input[type="checkbox"]')
+    .all())
+    await checkbox.check();
+  await submit();
+  assert.equal((await saved()).institutions.at(-1).status, "active");
+  await click("institution-detail", eligibleClinic.id);
+  assert.match(await page.locator("#dialog").innerText(), /苏禾/);
+  await click("edit-institution", eligibleClinic.id);
+  await page.locator('#dialog [name="serviceHours"]').fill("10:00—19:00");
+  await submit();
+  assert.equal((await saved()).institutions.at(-1).serviceHours, "10:00—19:00");
   // Changing identity within a phone screen preserves scroll and hides owner-only actions.
   await fresh("family/me/pet-1");
   await click("switch-member", "周先生");

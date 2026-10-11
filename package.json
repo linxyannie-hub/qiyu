@@ -7,14 +7,17 @@
   "scripts": {
     "start": "node scripts/serve.mjs",
     "build": "node scripts/build.mjs",
+    "package:static": "node scripts/package-static.mjs",
     "test": "node --test tests/*.test.mjs",
     "check": "node --check assets/app.mjs && node --check assets/domain.mjs && node --check assets/store.mjs",
-    "test:browser": "node tests/browser.mjs"
+    "test:browser": "node tests/browser.mjs",
+    "test:static": "node scripts/verify-static.mjs"
   },
   "engines": {
     "node": ">=20"
   },
   "devDependencies": {
+    "esbuild": "0.28.2",
     "playwright": "1.64.0"
   }
 }

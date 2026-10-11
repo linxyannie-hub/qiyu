@@ -5,6 +5,7 @@ import {
   transition,
   currentPlan,
   effectiveTaskEvents,
+  careLoopSummary,
   normalizeState,
   day,
   uid,
@@ -193,7 +194,17 @@ test("护理接单转交，医生答复，家庭确认形成闭环", () => {
     "doctor",
   );
   assert.equal(s.concerns[0].status, "answered");
-  s = apply(s, { type: "resolve", id }, "family", "周女士");
+  s = apply(s, { type: "ackAction", id }, "family", "周女士");
+  s = apply(
+    s,
+    {
+      type: "resolve",
+      id,
+      reason: "已按院方交付的安排完成本次行动，并确认复查联系路径",
+    },
+    "family",
+    "周女士",
+  );
   assert.equal(s.concerns[0].status, "resolved");
 });
 test("护理不能交付专业答复，运营不能发布正式计划", () => {
@@ -607,7 +618,13 @@ test("医生负责的问题重新打开后仍处于专业判断状态", () => {
     { type: "reply", id: "concern-1", text: "已核对", nextAction: "复查" },
     "doctor",
   );
-  s = apply(s, { type: "resolve", id: "concern-1" }, "family", "周女士");
+  s = apply(s, { type: "ackAction", id: "concern-1" }, "family", "周女士");
+  s = apply(
+    s,
+    { type: "resolve", id: "concern-1", reason: "已完成联系并确认下一步" },
+    "family",
+    "周女士",
+  );
   s = apply(s, { type: "reopen", id: "concern-1" }, "family", "周女士");
   assert.equal(s.concerns[0].status, "clinical");
   assert.equal(s.concerns[0].assigneeRole, "doctor");
@@ -622,7 +639,16 @@ test("家人确认下一步后仍需要完成实际行动才关闭问题", () =>
   );
   s = apply(s, { type: "ackAction", id: "concern-1" }, "family", "周女士");
   assert.equal(s.concerns[0].status, "action");
-  s = apply(s, { type: "resolve", id: "concern-1" }, "family", "周女士");
+  s = apply(
+    s,
+    {
+      type: "resolve",
+      id: "concern-1",
+      reason: "已联系本院，确认本次行动完成",
+    },
+    "family",
+    "周女士",
+  );
   assert.equal(s.concerns[0].status, "resolved");
 });
 test("责任转交给替补时保留专业处理历史", () => {
@@ -686,6 +712,7 @@ test("同一预约存在待确认改约时禁止重复申请", () => {
 });
 test("原复查完成后同步撤销待确认改约，不能再确认出第二次预约", () => {
   let s = seed();
+  s.appointments[0].date = day();
   const plans = JSON.stringify(s.plans);
   s = apply(
     s,
@@ -698,6 +725,8 @@ test("原复查完成后同步撤销待确认改约，不能再确认出第二�
     type: "appointmentStatus",
     id: "appt-1",
     status: "completed",
+    note: "已到院复查，资料已交付家庭",
+    nextAction: "按医生本次交付的后续说明继续联系本院",
   });
   assert.equal(s.appointments.at(-1).status, "cancelled");
   assert.match(s.appointments.at(-1).cancelReason, /原复查已完成/);
@@ -955,4 +984,614 @@ test("已接收的正式服务首次主动求助也是有效使用，同轮不�
   assert.equal(s.activations.length, 1);
   s = apply(s, action, "family", "周女士");
   assert.equal(s.activations.length, 1);
+});
+test("困难接手、专业交付、实际行动、到院复查及结轮分别保留事实", () => {
+  let s = seed();
+  const activationCount = s.activations.length;
+  s = apply(
+    s,
+    {
+      type: "concern",
+      petId: "pet-3",
+      title: "护理未完成",
+      body: "佩戴防护圈遇到困难",
+      difficulty: "动物抗拒",
+    },
+    "family",
+    "张先生",
+  );
+  const id = s.concerns[0].id;
+  assert.equal(careLoopSummary(s, "pet-3").stage, "support");
+  s = apply(s, { type: "claim", id });
+  s = apply(s, { type: "escalate", id });
+  s = apply(
+    s,
+    {
+      type: "reply",
+      id,
+      text: "已核对记录，请联系本院确认操作。",
+      nextAction: "由张先生联系随访协调员，按本院交付的说明完成本次行动。",
+    },
+    "doctor",
+  );
+  assert.equal(careLoopSummary(s, "pet-3").ownerRole, "family");
+  s = apply(s, { type: "ackAction", id }, "family", "张先生");
+  assert.equal(s.concerns[0].status, "action");
+  assert.throws(
+    () =>
+      apply(s, {
+        type: "end",
+        petId: "pet-3",
+        endType: "完成本轮随访",
+        reason: "交付资料",
+      }),
+    /未结/,
+  );
+  s = apply(
+    s,
+    { type: "resolve", id, reason: "已联系院方，并按交付说明完成本次行动" },
+    "family",
+    "张先生",
+  );
+  assert.equal(careLoopSummary(s, "pet-3").stage, "review");
+  assert.equal(careLoopSummary(s, "pet-3").readyToEnd, false);
+  s = apply(
+    s,
+    {
+      type: "appointmentStatus",
+      id: "appt-2",
+      status: "completed",
+      note: "已到院完成本次复查，相关资料已交付家庭",
+      nextAction: "家庭按本次医院交付的书面后续说明执行，需要协助时联系本院",
+    },
+    "doctor",
+  );
+  assert.equal(careLoopSummary(s, "pet-3").stage, "closure");
+  assert.equal(careLoopSummary(s, "pet-3").readyToEnd, true);
+  s = apply(s, {
+    type: "end",
+    petId: "pet-3",
+    endType: "完成本轮随访",
+    reason: "已交付复查资料与本轮后续联系安排",
+  });
+  const loop = careLoopSummary(s, "pet-3");
+  assert.equal(loop.stage, "closed");
+  assert.ok(loop.steps.every((step) => step.status === "done"));
+  assert.equal(s.concerns[0].closedBy, "张先生");
+  assert.equal(
+    s.appointments.find((a) => a.id === "appt-2").completedBy,
+    "陈予安",
+  );
+  assert.equal(s.activations.length, activationCount);
+  assert.throws(
+    () => apply(s, { type: "reopen", id }, "family", "张先生"),
+    /本轮已结束/,
+  );
+});
+test("收到专业安排不等于实际完成，新答复要求重新确认", () => {
+  let s = apply(
+    seed(),
+    {
+      type: "reply",
+      id: "concern-1",
+      text: "已核对",
+      nextAction: "请联系本院",
+    },
+    "doctor",
+  );
+  assert.throws(
+    () =>
+      apply(
+        s,
+        { type: "resolve", id: "concern-1", reason: "已联系" },
+        "family",
+        "周女士",
+      ),
+    /先确认/,
+  );
+  s = apply(s, { type: "ackAction", id: "concern-1" }, "family", "周女士");
+  assert.ok(s.concerns[0].actionAcknowledgedAt);
+  assert.throws(
+    () => apply(s, { type: "resolve", id: "concern-1" }, "family", "周女士"),
+    /实际完成/,
+  );
+  s = apply(
+    s,
+    {
+      type: "reply",
+      id: "concern-1",
+      text: "已补充交付说明",
+      nextAction: "请先核对新交付的说明后联系本院",
+    },
+    "doctor",
+  );
+  assert.equal(s.concerns[0].status, "answered");
+  assert.equal(s.concerns[0].actionAcknowledgedAt, undefined);
+  assert.equal(
+    careLoopSummary(s, "pet-1").steps.find((x) => x.key === "action").status,
+    "current",
+  );
+});
+test("行动中的补充请求和人员交接不抹去已交付的下一步", () => {
+  let s = apply(
+    seed(),
+    {
+      type: "reply",
+      id: "concern-1",
+      text: "已核对",
+      nextAction: "联系本院确认",
+    },
+    "doctor",
+  );
+  s = apply(s, { type: "ackAction", id: "concern-1" }, "family", "周女士");
+  s = apply(
+    s,
+    { type: "supplement", id: "concern-1", text: "请补充联系时间" },
+    "doctor",
+  );
+  s = apply(s, {
+    type: "reassign",
+    id: "concern-1",
+    assignee: "王雨",
+    note: "接班跟进",
+  });
+  assert.equal(s.concerns[0].status, "supplement");
+  s = apply(
+    s,
+    { type: "reply", id: "concern-1", text: "刚才已联系本院" },
+    "family",
+    "周女士",
+  );
+  assert.equal(s.concerns[0].status, "action");
+  assert.equal(s.concerns[0].nextAction, "联系本院确认");
+  s = apply(s, { type: "reassign", id: "concern-1", assignee: "陈予安" });
+  assert.equal(s.concerns[0].status, "action");
+});
+test("未来预约不能登记已复查，到院记录必须有交付说明", () => {
+  const s = seed();
+  assert.throws(
+    () =>
+      apply(s, {
+        type: "appointmentStatus",
+        id: "appt-1",
+        status: "completed",
+        note: "已到院",
+        nextAction: "已交资料",
+      }),
+    /未来预约/,
+  );
+  assert.throws(
+    () =>
+      apply(s, {
+        type: "appointmentStatus",
+        id: "appt-2",
+        status: "completed",
+      }),
+    /到院复查/,
+  );
+  assert.throws(
+    () =>
+      apply(s, {
+        type: "appointmentStatus",
+        id: "appt-2",
+        status: "completed",
+        note: "已到院",
+      }),
+    /后续安排/,
+  );
+  assert.throws(
+    () =>
+      apply(
+        s,
+        { type: "appointmentStatus", id: "appt-2", status: "confirmed" },
+        "doctor",
+      ),
+    /协调员/,
+  );
+  assert.equal(s.appointments[1].status, "confirmed");
+});
+test("正常结轮不能留下未完成复查，退出不虚构复查完成", () => {
+  let s = seed();
+  assert.throws(
+    () =>
+      apply(s, {
+        type: "end",
+        petId: "pet-3",
+        endType: "完成本轮随访",
+        reason: "本轮完成",
+      }),
+    /复查/,
+  );
+  s = apply(s, {
+    type: "end",
+    petId: "pet-3",
+    endType: "主人退出服务",
+    reason: "主人已确认退出，相关资料已交付，后续需要时联系本院",
+  });
+  assert.equal(s.pets[2].endType, "主人退出服务");
+  assert.equal(s.appointments[1].status, "cancelled");
+  assert.match(s.appointments[1].cancelReason, /主人退出/);
+  const loop = careLoopSummary(s, "pet-3");
+  assert.equal(loop.stage, "closed");
+  assert.equal(loop.steps.find((x) => x.key === "review").status, "pending");
+  assert.equal(loop.steps.find((x) => x.key === "support").status, "optional");
+  assert.equal(s.activations.length, 3);
+});
+test("退出待发布的服务后，不会再次交付原审核计划", () => {
+  let s = apply(seed(), {
+    type: "end",
+    petId: "pet-4",
+    endType: "主人退出服务",
+    reason: "主人确认暂不接收本轮服务，材料已保留",
+  });
+  assert.equal(s.plans.find((p) => p.id === "plan-4").status, "withdrawn");
+  assert.equal(s.activations.length, 3);
+  assert.throws(
+    () => apply(s, { type: "publish", id: "plan-4" }, "doctor"),
+    /待审核/,
+  );
+});
+test("旧已完成复查不补造说明，交付资料时继续保留旧事实", () => {
+  let s = seed();
+  s.appointments[1].status = "completed";
+  s.appointments[1].completedAt = new Date().toISOString();
+  normalizeState(s);
+  assert.equal(s.appointments[1].reviewNote, undefined);
+  assert.equal(s.appointments[1].completedBy, undefined);
+  s = apply(s, {
+    type: "end",
+    petId: "pet-3",
+    endType: "完成本轮随访",
+    reason: "已核对既有复查记录，本轮资料与后续说明已交付家庭",
+  });
+  assert.equal(s.appointments[1].reviewNote, undefined);
+  assert.equal(s.pets[2].status, "ended");
+});
+test("闭环摘要不把无人求助或家庭打卡当作医院接手与临床结果", () => {
+  let s = seed();
+  const before = JSON.stringify(s);
+  const pending = careLoopSummary(s, "pet-4");
+  assert.equal(pending.stage, "preparation");
+  assert.equal(pending.ownerRole, "doctor");
+  assert.equal(
+    pending.steps.find((x) => x.key === "support").status,
+    "optional",
+  );
+  assert.equal(JSON.stringify(s), before);
+  s = apply(
+    s,
+    { type: "report", petId: "pet-3", taskId: "task-pet-3-0", result: "done" },
+    "family",
+    "张先生",
+  );
+  const loop = careLoopSummary(s, "pet-3");
+  assert.equal(loop.steps.find((x) => x.key === "support").status, "optional");
+  assert.notEqual(loop.steps.find((x) => x.key === "review").status, "done");
+  assert.notEqual(loop.steps.find((x) => x.key === "closed").status, "done");
+  assert.equal(careLoopSummary(s, "missing"), null);
+});
+test("机构具备复杂术后范围、随访人员、临床负责人和复查路径才可开通", () => {
+  let s = apply(
+    seed(),
+    { type: "institution", name: "测试机构", city: "上海", contact: "负责人" },
+    "ops",
+  );
+  const id = s.institutions.at(-1).id;
+  assert.throws(
+    () => apply(s, { type: "activateInstitution", id }, "ops"),
+    /复杂术后/,
+  );
+  assert.throws(
+    () =>
+      apply(
+        s,
+        {
+          type: "institutionProfile",
+          id,
+          surgeryScopes: ["眼科术后"],
+          followupContact: "随访人员",
+        },
+        "ops",
+      ),
+    /临床负责人/,
+  );
+  s = apply(
+    s,
+    {
+      type: "institutionProfile",
+      id,
+      surgeryScopes: ["眼科术后", "眼科术后", "无效场景"],
+      followupContact: "随访人员",
+      clinicalLead: "临床负责人",
+      serviceHours: "09:00—18:00",
+      reviewPath: "通过本院随访人员确认到院复查",
+    },
+    "ops",
+  );
+  assert.equal(s.institutions.at(-1).status, "onboarding");
+  assert.deepEqual(s.institutions.at(-1).surgeryScopes, ["眼科术后"]);
+  assert.throws(
+    () => apply(s, { type: "activateInstitution", id }, "ops"),
+    /实施验收/,
+  );
+  s = apply(
+    s,
+    {
+      type: "activateInstitution",
+      id,
+      checks: ["handoff", "instructions", "familyPath", "reviewPath"],
+    },
+    "ops",
+  );
+  assert.equal(s.institutions.at(-1).status, "active");
+  assert.equal(s.institutions.at(-1).activatedBy, "许宁");
+  assert.ok(s.institutions.at(-1).activatedAt);
+});
+test("主机构配置双向同步，其他机构与采购联系人保持独立", () => {
+  let s = apply(
+    seed(),
+    {
+      type: "institution",
+      name: "另一个机构",
+      city: "上海",
+      contact: "采购联系人",
+    },
+    "ops",
+  );
+  const other = structuredClone(s.institutions.at(-1));
+  const buyer = s.institutions[0].contact;
+  s = apply(s, {
+    type: "settings",
+    values: {
+      ...s.clinic,
+      name: "禾伴专科医院",
+      contact: "新随访人员",
+      hours: "08:00—18:00",
+    },
+  });
+  assert.equal(s.institutions[0].name, "禾伴专科医院");
+  assert.equal(s.institutions[0].followupContact, "新随访人员");
+  assert.equal(s.institutions[0].contact, buyer);
+  assert.deepEqual(s.institutions.at(-1), other);
+  s = apply(
+    s,
+    {
+      type: "institutionProfile",
+      id: "clinic-1",
+      name: "禾伴动物医院",
+      surgeryScopes: ["骨科术后"],
+      followupContact: "林晓",
+      clinicalLead: "陈予安",
+      serviceHours: "09:00—18:00",
+      reviewPath: "本院随访人员确认到院时间",
+    },
+    "ops",
+  );
+  assert.equal(s.clinic.name, "禾伴动物医院");
+  assert.equal(s.clinic.contact, "林晓");
+  assert.equal(s.clinic.hours, "09:00—18:00");
+  assert.deepEqual(s.institutions.at(-1), other);
+});
+test("复查申请校验日历日期和时间，家庭不能改动别家的预约", () => {
+  const s = seed();
+  assert.throws(
+    () =>
+      apply(
+        s,
+        {
+          type: "appointment",
+          petId: "pet-1",
+          date: "2027-02-31",
+          time: "10:00",
+        },
+        "family",
+        "周女士",
+      ),
+    /有效/,
+  );
+  assert.throws(
+    () =>
+      apply(
+        s,
+        { type: "appointment", petId: "pet-1", date: day(3), time: "28:00" },
+        "family",
+        "周女士",
+      ),
+    /有效/,
+  );
+  assert.throws(
+    () =>
+      apply(
+        s,
+        { type: "appointmentStatus", id: "appt-2", status: "cancelled" },
+        "family",
+        "周女士",
+      ),
+    /授权/,
+  );
+  assert.throws(
+    () =>
+      apply(
+        s,
+        { type: "reschedule", id: "appt-2", date: day(3), time: "10:00" },
+        "family",
+        "周女士",
+      ),
+    /授权/,
+  );
+});
+test("同一到院时间不形成重复有效预约，原时间未改变不生成改期", () => {
+  let s = seed();
+  const original = s.appointments[0];
+  assert.throws(
+    () =>
+      apply(
+        s,
+        {
+          type: "appointment",
+          petId: "pet-1",
+          date: original.date,
+          time: original.time,
+        },
+        "family",
+        "周女士",
+      ),
+    /已有有效预约/,
+  );
+  assert.throws(
+    () =>
+      apply(
+        s,
+        {
+          type: "reschedule",
+          id: original.id,
+          date: original.date,
+          time: original.time,
+        },
+        "family",
+        "周女士",
+      ),
+    /原预约相同/,
+  );
+  s = apply(
+    s,
+    { type: "appointment", petId: "pet-1", date: day(5), time: "15:00" },
+    "family",
+    "周女士",
+  );
+  assert.throws(
+    () =>
+      apply(s, {
+        type: "appointment",
+        petId: "pet-1",
+        date: day(5),
+        time: "15:00",
+      }),
+    /已有有效预约/,
+  );
+  assert.throws(
+    () =>
+      apply(
+        s,
+        { type: "reschedule", id: original.id, date: day(5), time: "15:00" },
+        "family",
+        "周女士",
+      ),
+    /已有有效预约/,
+  );
+});
+test("旧改期记录与另一有效预约撞在同一时刻时不能继续确认", () => {
+  let s = apply(
+    seed(),
+    { type: "reschedule", id: "appt-1", date: day(5), time: "15:00" },
+    "family",
+    "周女士",
+  );
+  const changed = s.appointments.at(-1);
+  s.appointments.push({
+    id: "old-duplicate",
+    petId: "pet-1",
+    date: changed.date,
+    time: changed.time,
+    status: "confirmed",
+  });
+  assert.throws(
+    () =>
+      apply(s, {
+        type: "appointmentStatus",
+        id: changed.id,
+        status: "confirmed",
+      }),
+    /重复记录/,
+  );
+  assert.equal(s.appointments[0].status, "confirmed");
+  assert.equal(changed.status, "requested");
+});
+test("本轮未处理草稿和审核安排阻止正常结轮，医生明确撤销后可交付", () => {
+  for (const status of ["draft", "review", "returned"]) {
+    let s = apply(seed(), {
+      type: "appointmentStatus",
+      id: "appt-2",
+      status: "completed",
+      note: "已到院复查，资料已交付家庭",
+      nextAction: "按本院本次交付的说明继续照护与联系",
+    });
+    const pending = {
+      ...structuredClone(s.plans.find((pl) => pl.id === "plan-3")),
+      id: `unprocessed-${status}`,
+      status,
+      publishedAt: null,
+      createdAt: new Date().toISOString(),
+    };
+    s.plans.push(pending);
+    const before = JSON.stringify(s);
+    const loop = careLoopSummary(s, "pet-3");
+    assert.equal(loop.readyToEnd, false);
+    assert.equal(loop.ownerRole, "doctor");
+    assert.ok(loop.blockers.some((text) => text.includes("先审核或明确撤销")));
+    assert.throws(
+      () =>
+        apply(s, {
+          type: "end",
+          petId: "pet-3",
+          endType: "完成本轮随访",
+          reason: "交付本轮资料与后续说明",
+        }),
+      /草稿或审核/,
+    );
+    assert.equal(JSON.stringify(s), before);
+    assert.throws(
+      () =>
+        apply(s, {
+          type: "withdrawPlan",
+          id: pending.id,
+          reason: "不再交付本草稿",
+        }),
+      /权限/,
+    );
+    s = apply(
+      s,
+      {
+        type: "withdrawPlan",
+        id: pending.id,
+        reason: "医生核对后确认该未交付草稿无需发布，现正式安排继续有效",
+      },
+      "doctor",
+    );
+    const withdrawn = s.plans.find((pl) => pl.id === pending.id);
+    assert.equal(withdrawn.status, "withdrawn");
+    assert.equal(withdrawn.withdrawnBy, "陈予安");
+    assert.deepEqual(withdrawn.items, pending.items);
+    assert.equal(currentPlan(s, "pet-3").id, "plan-3");
+    assert.equal(careLoopSummary(s, "pet-3").readyToEnd, true);
+    s = apply(s, {
+      type: "end",
+      petId: "pet-3",
+      endType: "完成本轮随访",
+      reason: "已交付本轮资料与实际后续说明",
+    });
+    assert.equal(s.pets[2].status, "ended");
+    assert.equal(
+      s.plans.find((pl) => pl.id === pending.id).withdrawReason,
+      withdrawn.withdrawReason,
+    );
+  }
+});
+test("撤销未交付安排必须记录原因，正式生效安排不能被撤销", () => {
+  const s = seed();
+  const before = JSON.stringify(s);
+  assert.throws(
+    () => apply(s, { type: "withdrawPlan", id: "plan-4" }, "doctor"),
+    /撤销原因/,
+  );
+  assert.throws(
+    () =>
+      apply(
+        s,
+        { type: "withdrawPlan", id: "plan-3", reason: "尝试撤销" },
+        "doctor",
+      ),
+    /未正式交付或尚未生效/,
+  );
+  assert.equal(JSON.stringify(s), before);
 });
