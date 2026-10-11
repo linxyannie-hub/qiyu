@@ -128,7 +128,7 @@ const petCell = (p) =>
 const foot = () =>
   `<footer class="page-foot"><span>${icon("shield")}来源清楚 · 责任明确 · 照护连续</span><span>栖愈 QIYU CARE · 让安心持续发生</span></footer>`;
 function head(title, desc, actions = "") {
-  return `<div class="page-head"><div><div class="eyebrow">QIYU CARE / ${route().role === "family" ? "FAMILY CARE" : "CARE WORKSPACE"}</div><h1>${esc(title)}</h1><p>${esc(desc)}</p></div><div class="actions">${actions}</div></div>`;
+  return `<div class="page-head"><div><div class="eyebrow">${roles[route().role].name}<span class="eyebrow-separator">/</span>QIYU CARE</div><h1>${esc(title)}</h1><p>${esc(desc)}</p></div><div class="actions">${actions}</div></div>`;
 }
 function roleMenu() {
   return `<details class="role-select"><summary>${icon(route().role === "family" ? "heart" : "grid")}<span>${roles[route().role].name}</span>${icon("down")}</summary><div class="role-menu">${Object.entries(
@@ -197,8 +197,143 @@ function familyShell(content) {
     )}</select></div>${content}</main><nav class="mobile-bottom" aria-label="家庭导航">${nav.map(([page, ic, label]) => `<a href="${href("family", page, p.id)}" class="${r.page === page ? "active" : ""}" ${r.page === page ? 'aria-current="page"' : ""}>${icon(ic)}<span>${label}</span>${page === "messages" && count ? `<i class="nav-message-dot">${count}</i>` : ""}</a>`).join("")}</nav><div class="phone-home-indicator"></div></div></div></div><aside class="phone-side-note"><span class="phone-note-icon">${icon("leaf")}</span><h2>从出院，到回归日常。</h2><p>安排清楚可见<br>家人轻松交接<br>问题有人接手</p><span class="phone-note-line"></span><small>连续照护，安心相伴</small></aside></div>`;
 }
 
+function workspaceOverview() {
+  const s = state(),
+    role = route().role;
+  let links, title, description, tag;
+  if (role === "clinic") {
+    title = "把每一轮照护，稳稳接起来。";
+    description =
+      "安排清楚可见，协作有序衔接。关注需要处理的事，让出院后的照护持续发生。";
+    tag = "本院照护总览";
+    links = [
+      [
+        "clipboard",
+        "出院交付",
+        s.plans.filter((p) => p.status === "review").length + " 待审核",
+        "plans",
+      ],
+      [
+        "heart",
+        "家庭照护",
+        s.pets.filter((p) => p.status === "active").length + " 进行中",
+        "pets",
+      ],
+      [
+        "chat",
+        "问题协同",
+        s.concerns.filter((c) => c.status !== "resolved").length + " 待跟进",
+        "queue",
+      ],
+      [
+        "calendar",
+        "复查交付",
+        s.appointments.filter((a) => a.status === "confirmed").length +
+          " 已确认",
+        "appointments",
+      ],
+    ];
+  } else if (role === "doctor") {
+    title = "让专业判断，有清楚的上下文。";
+    description =
+      "从正式安排到家庭事实，在一处核对、判断和交付。把专业时间留给真正需要你的问题。";
+    tag = "专业协作总览";
+    links = [
+      [
+        "clipboard",
+        "计划审核",
+        s.plans.filter((p) => p.status === "review").length + " 待审核",
+        "approvals",
+      ],
+      [
+        "stethoscope",
+        "专业判断",
+        s.concerns.filter(
+          (c) => c.status === "clinical" && c.assigneeRole === "doctor",
+        ).length + " 待处理",
+        "clinical",
+      ],
+      [
+        "chat",
+        "持续跟进",
+        s.concerns.filter(
+          (c) => c.assigneeRole === "doctor" && c.status !== "resolved",
+        ).length + " 在跟进",
+        "clinical",
+      ],
+      [
+        "paw",
+        "服务病例",
+        s.pets.filter((p) => p.status === "active").length + " 进行中",
+        "pets",
+      ],
+    ];
+  } else {
+    title = "让好的照护，成为持续的服务。";
+    description =
+      "机构实施、临床模板、用量核对和持续支持，有序衔接每一家医院的日常。";
+    tag = "机构服务总览";
+    links = [
+      [
+        "building",
+        "合作机构",
+        s.institutions.filter((c) => c.status === "active").length + " 已开通",
+        "institutions",
+      ],
+      [
+        "clipboard",
+        "照护模板",
+        s.templates.filter((t) => t.status === "approved").length + " 已审核",
+        "templates",
+      ],
+      [
+        "wallet",
+        "有效用量",
+        s.activations.filter((a) => a.status === "valid").length + " 已启用",
+        "billing",
+      ],
+      [
+        "chat",
+        "机构支持",
+        s.tickets.filter((t) => t.status === "open").length + " 待跟进",
+        "support",
+      ],
+    ];
+  }
+  return `<section class="overview-banner"><div class="overview-copy"><span class="overview-kicker">${icon("leaf")}${tag}</span><h2>${title}</h2><p>${description}</p></div><div class="care-flow" aria-label="工作流程入口">${links.map(([ic, label, count, page], index) => `<a class="care-flow-step" href="${href(role, page)}"><span class="flow-icon tone-${index}">${icon(ic)}</span><strong>${label}</strong><small>${count}</small><span class="flow-arrow">${icon("chevron")}</span></a>`).join("")}</div></section>`;
+}
+function enhanceSectionHeadings() {
+  const names = [
+    [/复查/, "calendar"],
+    [/团队|成员|分工|协作/, "users"],
+    [/问题|反馈|关注/, "chat"],
+    [/收款|退款|结算|软件/, "wallet"],
+    [/模板|计划|安排/, "clipboard"],
+    [/资料/, "file"],
+    [/发生|记录/, "clock"],
+    [/机构|合作/, "building"],
+    [/实施|交付/, "shield"],
+    [/照护|护理/, "heart"],
+    [/服务/, "shield"],
+  ];
+  for (const title of app.querySelectorAll(
+    ".card-head h2,.card.pad > h2,.card.pad > .field-action > h2",
+  )) {
+    if (title.querySelector("svg")) continue;
+    const name = names.find(([pattern]) =>
+      pattern.test(title.textContent),
+    )?.[1];
+    if (name) {
+      title.classList.add("section-title");
+      title.insertAdjacentHTML(
+        "afterbegin",
+        `<span class="section-icon">${icon(name)}</span>`,
+      );
+    }
+  }
+}
 function stat(label, number, sub, ic = "heart", suffix = "", green = false) {
-  return `<div class="stat"><div class="stat-top">${esc(label)}${icon(ic)}</div><div class="stat-number">${number}<small>${suffix}</small></div><div class="stat-foot ${green ? "green" : ""}">${green ? icon("check") : ""}${esc(sub)}</div></div>`;
+  return `<div class="stat tone-${{ chat: "amber", calendar: "blue", wallet: "sand", clock: "amber", building: "blue" }[ic] || "green"}"><div class="stat-top"><span>${esc(label)}</span><span class="metric-icon">${icon(ic)}</span></div><div class="stat-number">${number}<small>${suffix}</small></div><div class="stat-foot ${green ? "green" : ""}">${green ? icon("check") : ""}${esc(sub)}</div></div>`;
 }
 function clinicDashboard() {
   const s = state(),
@@ -208,7 +343,7 @@ function clinicDashboard() {
     n = s.pets.filter((p) => p.status === "active").length;
   const pending =
     r.role === "doctor" ? open.filter((c) => c.status === "clinical") : open;
-  return `${head(`${actor()}，今天也辛苦了`, dateLabel() + " · 每一次及时回应，都让照护更安心。", r.role === "clinic" ? btn("新建出院计划", "new-plan", "", "primary", "plus") : linkBtn("查看专业待办", href("doctor", "clinical"), "primary", "stethoscope"))}<section class="hero"><div><div class="eyebrow">CONTINUOUS CARE, TOGETHER</div><h2>让出院后的每一天，都有人接住。</h2><p>家庭认真记录每一次照护，你的团队及时接手每一个问题。<br>把零散沟通，连接成有始有终的安心服务。</p><a class="hero-link" href="${href(r.role, r.role === "doctor" ? "clinical" : "queue")}">查看今天需要关注的事项 ${icon("arrow")}</a></div><div class="hero-illustration"><div class="hero-orbit"></div><div class="hero-mini">${icon("shield")}<div><b>当前安排，清楚可见</b><br><small>家人与医院同步协作</small></div></div><div class="hero-pet">${petArt("犬", "#D4AF78")}</div><div class="hero-mini bottom">${icon("heart")}<div><b>每一次照护，都有回应</b><br><small>陪伴不止于出院</small></div></div></div></section><section class="stats" aria-label="服务指标">${stat("进行中的照护", n, "已接收并开始执行", "heart", "只宠物", true)}${stat(r.role === "doctor" ? "待专业判断" : "等待团队处理", pending.length, r.role === "doctor" ? "由兽医确认下一步" : "有责任人的协同队列", "chat", "项")}${stat("已确认复查", apps.length, "按医院确认的时间到院", "calendar", "项")}${stat("正式安排已交付", s.plans.filter((p) => p.status === "published").length, "来源与签发信息完整", "shield", "份", true)}</section><div class="dashboard-grid"><section class="card"><div class="card-head"><div><h2>需要关注的事项 <span class="count-dot">${pending.length}</span></h2><p>先处理需要你行动的事，让每一份求助都有着落。</p></div><a class="text-btn" href="${href(r.role, r.role === "doctor" ? "clinical" : "queue")}">全部事项 ${icon("chevron")}</a></div>${queueTabs(pending)}${concernTable(pending.slice(0, 5), true)}<div class="table-footer"><span>普通执行记录已汇总至病例</span><span>显示 ${pending.length} 项</span></div></section><aside class="stack"><section class="card"><div class="card-head"><h2>近期复查</h2><a class="text-btn" href="${href(r.role, r.role === "clinic" ? "appointments" : "pets")}">${icon("arrow")}</a></div>${
+  return `${head(`${actor()}，今天也辛苦了`, dateLabel() + " · 每一次及时回应，都让照护更安心。", r.role === "clinic" ? btn("新建出院计划", "new-plan", "", "primary", "plus") : linkBtn("查看专业待办", href("doctor", "clinical"), "primary", "stethoscope"))}${workspaceOverview()}<section class="stats" aria-label="服务指标">${stat("进行中的照护", n, "已接收并开始执行", "heart", "只宠物", true)}${stat(r.role === "doctor" ? "待专业判断" : "等待团队处理", pending.length, r.role === "doctor" ? "由兽医确认下一步" : "有责任人的协同队列", "chat", "项")}${stat("已确认复查", apps.length, "按医院确认的时间到院", "calendar", "项")}${stat("正式安排已交付", s.plans.filter((p) => p.status === "published").length, "来源与签发信息完整", "shield", "份", true)}</section><div class="dashboard-grid"><section class="card"><div class="card-head"><div><h2>需要关注的事项 <span class="count-dot">${pending.length}</span></h2><p>先处理需要你行动的事，让每一份求助都有着落。</p></div><a class="text-btn" href="${href(r.role, r.role === "doctor" ? "clinical" : "queue")}">全部事项 ${icon("chevron")}</a></div>${queueTabs(pending, true)}${concernTable(pending.slice(0, 5), true)}<div class="table-footer"><span>普通执行记录已汇总至病例</span><span>显示 ${pending.length} 项</span></div></section><aside class="stack"><section class="card"><div class="card-head"><h2>近期复查</h2><a class="text-btn" href="${href(r.role, r.role === "clinic" ? "appointments" : "pets")}">${icon("arrow")}</a></div>${
     apps
       .slice(0, 3)
       .map((a) => {
@@ -224,7 +359,7 @@ function clinicDashboard() {
     )
     .join("")}</div></section>`;
 }
-function queueTabs(list) {
+function queueTabs(list, compact = false) {
   return `<div class="tabs" role="tablist" aria-label="事项状态">${[
     ["all", "全部事项"],
     ["new", "待接收"],
@@ -235,6 +370,10 @@ function queueTabs(list) {
     ["action", "待行动"],
     ["resolved", "已解决"],
   ]
+    .filter(
+      ([key]) =>
+        !compact || ["all", "new", "clinical", "answered"].includes(key),
+    )
     .map(
       ([k, l]) =>
         `<button role="tab" aria-selected="${filter === k}" class="tab ${filter === k ? "active" : ""}" data-action="queue-filter" data-id="${k}">${l}<span>${k === "all" ? list.length : list.filter((c) => c.status === k).length}</span></button>`,
@@ -445,7 +584,7 @@ function opsDashboard() {
   const s = state(),
     valid = s.activations.filter((a) => a.status === "valid"),
     amount = valid.reduce((x, a) => x + a.amount, 0);
-  return `${head("把每一家医院的服务，稳稳接起来", dateLabel() + " · 机构实施、持续支持与清楚结算。", btn("新增合作机构", "new-institution", "", "primary", "plus"))}<section class="hero"><div><div class="eyebrow">GROW WITH CARE</div><h2>让好的照护，成为可持续的服务。</h2><p>从机构开通到每一轮服务交付，<br>关注真正的使用，也关注每一家医院的长期体验。</p><a class="hero-link" href="${href("ops", "institutions")}">管理合作机构 ${icon("arrow")}</a></div><div class="hero-illustration"><div class="hero-orbit"></div><div class="hero-pet">${petArt("猫", "#B9B6A5")}</div><div class="hero-mini">${icon("building")}<b>与专业团队，一起成长</b></div></div></section><section class="stats">${stat("已开通合作机构", s.institutions.filter((c) => c.status === "active").length, "已完成实施交付", "building", "家", true)}${stat("有效服务启用", valid.length, "按真实启用规则核对", "heart", "例")}${stat("本期软件用量", money(amount), "以有效用量明细为依据", "wallet", "元")}${stat("待处理机构支持", s.tickets.filter((t) => t.status === "open").length, "跟踪实施与使用问题", "chat", "项")}</section><div class="settings-grid"><section class="card pad"><div class="field-action"><h2>合作机构</h2><a class="text-btn" href="${href("ops", "institutions")}">全部机构 ${icon("arrow")}</a></div>${institutionTable()}</section><section class="card pad"><h2 class="section-gap">实施与交付</h2><div class="timeline">${[
+  return `${head("把每一家医院的服务，稳稳接起来", dateLabel() + " · 机构实施、持续支持与清楚结算。", btn("新增合作机构", "new-institution", "", "primary", "plus"))}${workspaceOverview()}<section class="stats">${stat("已开通合作机构", s.institutions.filter((c) => c.status === "active").length, "已完成实施交付", "building", "家", true)}${stat("有效服务启用", valid.length, "按真实启用规则核对", "heart", "例")}${stat("本期软件用量", money(amount), "以有效用量明细为依据", "wallet", "元")}${stat("待处理机构支持", s.tickets.filter((t) => t.status === "open").length, "跟踪实施与使用问题", "chat", "项")}</section><div class="settings-grid"><section class="card pad"><div class="field-action"><h2>合作机构</h2><a class="text-btn" href="${href("ops", "institutions")}">全部机构 ${icon("arrow")}</a></div>${institutionTable()}</section><section class="card pad"><h2 class="section-gap">实施与交付</h2><div class="timeline">${[
     ["服务责任", "确认协调员、替补与主治兽医"],
     ["出院交接", "配置已审核模板和家庭接收流程"],
     ["持续协同", "跟踪接单、专业答复与复查"],
@@ -525,7 +664,7 @@ function familyToday() {
     tasks
       .map((t) => {
         const e = events.filter((e) => e.taskId === t.id).at(-1);
-        return `<div class="task-card ${e?.result === "done" ? "done" : ""}"><span class="task-clock">${t.time}</span><div class="task-info"><h3>${esc(t.title)}</h3>${badge(t.type, "")}<div class="task-status">${icon(e?.result === "done" ? "check" : "clock")}${e ? `${esc(e.actor)} · ${esc(resultLabels[e.result])}` : "本次尚无记录"}</div></div>${btn(e ? "查看记录" : "去记录", "task", t.id, e ? "small" : "small soft", e ? "chevron" : "edit")}</div>`;
+        return `<div class="task-card ${e?.result === "done" ? "done" : ""}"><span class="task-clock">${t.time}</span><div class="task-info"><div class="task-title-row"><h3>${esc(t.title)}</h3><span class="task-type">${icon({ 护理: "heart", 观察: "eye", 用药: "clipboard", 活动: "paw", 饮食: "leaf" }[t.type] || "clipboard")}${esc(t.type)}</span></div><div class="task-status">${icon(e?.result === "done" ? "check" : "clock")}${e ? `${esc(e.actor)} · ${esc(resultLabels[e.result])}` : "本次尚无记录"}</div></div>${btn(e ? "查看记录" : "去记录", "task", t.id, e ? "small" : "small soft", e ? "chevron" : "edit")}</div>`;
       })
       .join("") ||
     empty("当前没有待执行事项", "本轮结束后可在资料中查看照护过程。")
@@ -570,6 +709,7 @@ function render() {
   render.lastRoute = location.hash;
   document.body.classList.toggle("family-mode", r.role === "family");
   if (r.role === "family") sessionStorage.setItem("qiyu.pet", selectedPet().id);
+  document.body.dataset.workspace = r.role;
   document.title = `${roles[r.role].name} · 栖愈`;
   let content;
   if (r.role === "family") {
@@ -603,6 +743,7 @@ function render() {
       }[r.page]?.() || clinicDashboard();
     app.innerHTML = desktopShell(content);
   }
+  enhanceSectionHeadings();
 }
 function toast(text, error = false) {
   const el = document.querySelector("#toast");

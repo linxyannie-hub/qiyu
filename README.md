@@ -45,7 +45,9 @@ assets/
   domain.mjs    业务对象、状态转换与校验
   store.mjs     状态持久化和同源同步
   icons.mjs     原创图形与图标
-  style.css     设计变量、响应式布局和交互状态
+  style.css     基础组件、响应式布局和交互状态
+  polish.css    字体、视觉层级、图标容器与统一间距
+  fonts/        本地中文字体与 OFL 授权
 scripts/
   serve.mjs     本地静态服务
   build.mjs     静态发布打包

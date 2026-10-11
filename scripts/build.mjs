@@ -2,10 +2,19 @@ import { mkdir, rm, cp, readdir, readFile, writeFile } from "node:fs/promises";
 import { createHash } from "node:crypto";
 
 const hash = createHash("sha256");
-for (const name of (await readdir("assets")).sort()) {
-  hash.update(name);
-  hash.update(await readFile(`assets/${name}`));
+async function fingerprint(directory) {
+  const entries = await readdir(directory, { withFileTypes: true });
+  entries.sort((a, b) => a.name.localeCompare(b.name, "en"));
+  for (const entry of entries) {
+    const file = `${directory}/${entry.name}`;
+    if (entry.isDirectory()) await fingerprint(file);
+    else {
+      hash.update(file);
+      hash.update(await readFile(file));
+    }
+  }
 }
+await fingerprint("assets");
 const release = hash.digest("hex").slice(0, 12);
 const assetPath = `assets/${release}`;
 await rm("dist", { recursive: true, force: true });
