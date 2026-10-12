@@ -77,6 +77,7 @@ try {
       errors.push(`${response.status()} ${response.url()}`);
   });
   const routes = [
+    "home/dashboard",
     "clinic/dashboard",
     "doctor/dashboard",
     "ops/dashboard",
@@ -98,7 +99,8 @@ try {
         await page.evaluate(() =>
           [...document.fonts].some(
             (font) =>
-              font.family === "Qiyu UI Sans" && font.status === "loaded",
+              /MiSans VF|Qiyu UI Sans/.test(font.family) &&
+              font.status === "loaded",
           ),
         ),
       );
@@ -136,7 +138,9 @@ try {
   assert.ok(
     await page.evaluate(() =>
       [...document.fonts].some(
-        (font) => font.family === "Qiyu UI Sans" && font.status === "loaded",
+        (font) =>
+          /MiSans VF|Qiyu UI Sans/.test(font.family) &&
+          font.status === "loaded",
       ),
     ),
   );

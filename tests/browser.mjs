@@ -57,6 +57,7 @@ try {
   };
   const close = async () => click("close-dialog");
   const routes = [
+    "home/dashboard",
     "clinic/dashboard",
     "clinic/queue",
     "clinic/pets",
@@ -86,6 +87,7 @@ try {
     "family/review/pet-4",
   ];
   const workspacePages = {
+    home: new Set(["dashboard"]),
     clinic: new Set([
       "dashboard",
       "queue",
@@ -161,6 +163,9 @@ try {
   // Check each distinct first-level control in its actual workspace, including dialogs.
   await page.setViewportSize({ width: 1440, height: 1000 });
   for (const route of routes) {
+    await page.emulateMedia({
+      reducedMotion: route.startsWith("home/") ? "reduce" : "no-preference",
+    });
     await fresh(route);
     const controls = await page
       .locator("main [data-action]")
@@ -176,6 +181,12 @@ try {
       await fresh(route);
       await click(c.action, c.id);
       await page.waitForTimeout(30);
+      if (c.action === "home-mood") {
+        assert.equal(await page.locator(".mood-row button.on").count(), 1);
+        assert.ok((await page.locator("#mood-say").innerText()).length > 0);
+        clicked++;
+        continue;
+      }
       assert.equal(
         await page.locator("#toast.error.visible").count(),
         0,

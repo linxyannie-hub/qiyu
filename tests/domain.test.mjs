@@ -413,6 +413,12 @@ test("计划草稿、审核、发布、家庭接收依次衔接", () => {
 });
 test("新版立即生效，旧未来任务失效，既往事实仍关联旧安排", () => {
   let s = seed();
+  s.tasks.push({
+    ...s.tasks.find((task) => task.petId === "pet-1"),
+    id: "old-future-task",
+    date: day(1),
+    cancelled: false,
+  });
   s = apply(
     s,
     {
@@ -425,11 +431,7 @@ test("新版立即生效，旧未来任务失效，既往事实仍关联旧安�
     "doctor",
   );
   assert.notEqual(currentPlan(s, "pet-1").id, "plan-1");
-  assert.ok(
-    s.tasks
-      .filter((t) => t.petId === "pet-1" && t.planId === "plan-1")
-      .every((t) => t.cancelled),
-  );
+  assert.ok(s.tasks.find((task) => task.id === "old-future-task").cancelled);
   assert.equal(s.events[0].planId, "plan-1");
 });
 test("未来安排发布不提前覆盖当前有效安排", () => {

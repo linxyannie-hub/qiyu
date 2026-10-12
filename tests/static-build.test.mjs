@@ -44,7 +44,12 @@ test("发布目录只包含可直接托管的浏览器文件", () => {
     ".json",
   ]);
   for (const file of files) {
-    assert.ok(file === ".nojekyll" || allowed.has(path.extname(file)), file);
+    assert.ok(
+      file === ".nojekyll" ||
+        path.basename(file) === "LICENSE" ||
+        allowed.has(path.extname(file)),
+      file,
+    );
     assert.doesNotMatch(
       file,
       /(?:^|\/)(?:package(?:-lock)?\.json|node_modules|scripts|tests|\.git|server)(?:\/|$)/,
@@ -60,7 +65,7 @@ test("首页与所有 CSS 资源引用使用可移植的相对路径", async () 
   assert.ok(references.some((value) => value.endsWith("/app.js")));
   for (const reference of references) {
     assert.ok(reference.startsWith("assets/"), reference);
-    assert.ok(files.includes(reference), reference);
+    assert.ok(files.includes(reference.split(/[?#]/)[0]), reference);
   }
   for (const css of files.filter((file) => file.endsWith(".css"))) {
     const contents = await readFile(
@@ -68,12 +73,13 @@ test("首页与所有 CSS 资源引用使用可移植的相对路径", async () 
       "utf8",
     );
     for (const match of contents.matchAll(
-      /url\(\s*["']?([^\s"')]+)["']?\s*\)/g,
+      /url\(\s*(?:"([^"]*)"|'([^']*)'|([^\s"')]+))\s*\)/g,
     )) {
-      if (/^(?:data:|https?:|#)/.test(match[1])) continue;
-      assert.ok(!match[1].startsWith("/"), `${css}: ${match[1]}`);
+      const reference = match[1] ?? match[2] ?? match[3];
+      if (/^(?:data:|https?:|#)/.test(reference)) continue;
+      assert.ok(!reference.startsWith("/"), `${css}: ${reference}`);
       const resource = path.posix.normalize(
-        path.posix.join(path.posix.dirname(css), match[1]),
+        path.posix.join(path.posix.dirname(css), reference),
       );
       assert.ok(files.includes(resource), `${css}: ${resource}`);
     }

@@ -52,7 +52,10 @@ export async function createStaticBuild({
     (file) => path.extname(file) !== ".mjs",
   );
   for (const file of assetFiles) {
-    if (!staticExtensions.has(path.extname(file).toLowerCase())) {
+    if (
+      !staticExtensions.has(path.extname(file).toLowerCase()) &&
+      path.basename(file) !== "LICENSE"
+    ) {
       throw new Error(`未批准的浏览器资源类型：assets/${file}`);
     }
     if (file === "app.js")
@@ -83,7 +86,7 @@ export async function createStaticBuild({
   const assetPath = `assets/${release}`;
   const scripts = [
     ...html.matchAll(
-      /<script\b[^>]*\bsrc=["']assets\/app\.mjs["'][^>]*>\s*<\/script>/g,
+      /<script\b[^>]*\bsrc=["']assets\/app\.mjs(?:\?[^"']*)?["'][^>]*>\s*<\/script>/g,
     ),
   ];
   if (scripts.length !== 1)
@@ -96,7 +99,9 @@ export async function createStaticBuild({
     /\b(?:src|href)=["']([^"']+)["']/g,
   )) {
     if (!reference.startsWith(`${assetPath}/`)) continue;
-    if (!outputAssets.has(reference.slice(assetPath.length + 1))) {
+    if (
+      !outputAssets.has(reference.slice(assetPath.length + 1).split(/[?#]/)[0])
+    ) {
       throw new Error(`首页引用的资源不存在：${reference}`);
     }
   }
