@@ -68,7 +68,7 @@ let filter = "all",
 function route() {
   const [role, page, id] = location.hash.slice(2).split("/");
   return {
-    role: Object.hasOwn(roles, role) ? role : "clinic",
+    role: role === "home" ? "home" : Object.hasOwn(roles, role) ? role : "clinic",
     page: page || "dashboard",
     id: id ? decodeURIComponent(id) : "",
   };
@@ -132,12 +132,14 @@ function head(title, desc, actions = "") {
   return `<div class="page-head"><div><div class="eyebrow">${roles[route().role].name}<span class="eyebrow-separator">/</span>QIYU CARE</div><h1>${esc(title)}</h1><p>${esc(desc)}</p></div><div class="actions">${actions}</div></div>`;
 }
 function roleMenu() {
-  return `<details class="role-select"><summary>${icon(route().role === "family" ? "heart" : "grid")}<span>${roles[route().role].name}</span>${icon("down")}</summary><div class="role-menu">${Object.entries(
+  const cur = route().role;
+  const curName = cur === "home" ? "栖愈首页" : roles[cur].name;
+  return `<details class="role-select"><summary>${icon(cur === "family" ? "heart" : "grid")}<span>${curName}</span>${icon("down")}</summary><div class="role-menu"><a class="${cur === "home" ? "current" : ""}" href="${href("home", "dashboard")}">${icon("leaf")}<div>栖愈首页<small>作品封面 · 平台介绍</small></div></a>${Object.entries(
     roles,
   )
     .map(
       ([key, r]) =>
-        `<a href="${href(key, key === "family" ? "today" : "dashboard")}">${icon({ clinic: "building", family: "heart", doctor: "stethoscope", ops: "chart" }[key])}<div>${r.name}<small>${key === "clinic" ? esc(state().clinic.contact) : r.person} · ${r.title}</small></div></a>`,
+        `<a class="${key === cur ? "current" : ""}" href="${href(key, key === "family" ? "today" : "dashboard")}">${icon({ clinic: "building", family: "heart", doctor: "stethoscope", ops: "chart" }[key])}<div>${r.name}<small>${key === "clinic" ? esc(state().clinic.contact) : r.person} · ${r.title}</small></div></a>`,
     )
     .join("")}</div></details>`;
 }
@@ -188,14 +190,14 @@ function familyShell(content) {
   const count = state().concerns.filter(
     (c) => c.petId === p.id && ["answered", "supplement"].includes(c.status),
   ).length;
-  return `<div class="phone-stage"><aside class="phone-intro"><a class="brand" href="${href("clinic", "dashboard")}">${logo()}<div><strong>栖愈</strong><small>QIYU CARE</small></div></a><div class="eyebrow">CARE THAT STAYS WITH YOU</div><h1>照护在手，<br>安心相伴。</h1><p>一份清楚的安排，<br>一段有人回应的照护。</p><div class="phone-intro-detail">${icon("shield")}与你的原医院，持续连接</div>${roleMenu()}</aside><div class="phone-frame"><div class="phone-screen"><div class="phone-status"><time>${timeStr(new Date())}</time><div class="phone-island"></div><span><svg viewBox="0 0 54 18" width="54" height="18" aria-hidden="true"><path d="M1 13v3M5 10v6M9 7v9M13 4v12" stroke="currentColor" stroke-width="2.5"/><path d="M21 7q6-6 12 0M24 10q3-3 6 0M27 13v1" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><rect x="38" y="5" width="13" height="9" rx="2" stroke="currentColor" fill="none"/><rect x="40" y="7" width="9" height="5" rx="1" fill="currentColor"/><path d="M53 8v3" stroke="currentColor" stroke-width="1.5"/></svg></span></div><div class="family-shell"><header class="family-top"><a class="brand" href="${href("family", "today", p.id)}">${logo()}<strong>栖愈</strong></a><div class="mini-capsule"><button data-action="family-more" aria-label="打开小程序菜单"><span class="capsule-dots">•••</span></button><i></i><a href="${href("family", "today", p.id)}" aria-label="回到今天"><span class="capsule-home"></span></a></div></header><main id="main" class="family-content"><div class="family-petbar">${petArt(p.species, p.color)}<div><strong>${esc(p.name)}</strong><small>${esc(p.scene)} · ${esc(state().clinic.name)}</small></div><select class="filter-select" id="family-pet" aria-label="选择宠物">${state()
+  return `<div class="phone-stage"><aside class="phone-intro"><a class="brand" href="${href("clinic", "dashboard")}">${logo()}<div><strong>栖愈</strong><small>QIYU CARE</small></div></a><div class="eyebrow">CARE THAT STAYS WITH YOU</div><h1>照护在手，<br>安心相伴。</h1><p>一份清楚的安排，<br>一段有人回应的照护。</p><div class="phone-intro-detail">${icon("shield")}与你的原医院，持续连接</div></aside><div class="phone-frame"><div class="phone-screen"><div class="phone-status"><time>${timeStr(new Date())}</time><div class="phone-island"></div><span><svg viewBox="0 0 54 18" width="54" height="18" aria-hidden="true"><path d="M1 13v3M5 10v6M9 7v9M13 4v12" stroke="currentColor" stroke-width="2.5"/><path d="M21 7q6-6 12 0M24 10q3-3 6 0M27 13v1" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><rect x="38" y="5" width="13" height="9" rx="2" stroke="currentColor" fill="none"/><rect x="40" y="7" width="9" height="5" rx="1" fill="currentColor"/><path d="M53 8v3" stroke="currentColor" stroke-width="1.5"/></svg></span></div><div class="family-shell"><header class="family-top"><a class="brand" href="${href("family", "today", p.id)}">${logo()}<strong>栖愈</strong></a><div class="mini-capsule"><button data-action="family-more" aria-label="打开小程序菜单"><span class="capsule-dots">•••</span></button><i></i><a href="${href("family", "today", p.id)}" aria-label="回到今天"><span class="capsule-home"></span></a></div></header><main id="main" class="family-content"><div class="family-petbar">${petArt(p.species, p.color)}<div><strong>${esc(p.name)}</strong><small>${esc(p.scene)} · ${esc(state().clinic.name)}</small></div><select class="filter-select" id="family-pet" aria-label="选择宠物">${state()
     .pets.map(
       (pet) =>
         `<option value="${pet.id}" ${p.id === pet.id ? "selected" : ""}>${esc(pet.name)}${pet.status === "ended" ? " · 已结束" : "的照护"}</option>`,
     )
     .join(
       "",
-    )}</select></div>${content}</main><nav class="mobile-bottom" aria-label="家庭导航">${nav.map(([page, ic, label]) => `<a href="${href("family", page, p.id)}" class="${r.page === page ? "active" : ""}" ${r.page === page ? 'aria-current="page"' : ""}>${icon(ic)}<span>${label}</span>${page === "messages" && count ? `<i class="nav-message-dot">${count}</i>` : ""}</a>`).join("")}</nav><div class="phone-home-indicator"></div></div></div></div><aside class="phone-side-note"><span class="phone-note-icon">${icon("leaf")}</span><h2>从出院，到回归日常。</h2><p>安排清楚可见<br>家人轻松交接<br>问题有人接手</p><span class="phone-note-line"></span><small>连续照护，安心相伴</small></aside></div>`;
+    )}</select></div>${content}</main><nav class="mobile-bottom" aria-label="家庭导航">${nav.map(([page, ic, label]) => `<a href="${href("family", page, p.id)}" class="${r.page === page ? "active" : ""}" ${r.page === page ? 'aria-current="page"' : ""}>${icon(ic)}<span>${label}</span>${page === "messages" && count ? `<i class="nav-message-dot">${count}</i>` : ""}</a>`).join("")}</nav><div class="phone-home-indicator"></div></div></div></div><aside class="phone-side-note"><span class="phone-note-icon">${icon("leaf")}</span><h2>从出院，到回归日常。</h2><p>安排清楚可见<br>家人轻松交接<br>问题有人接手</p><span class="phone-note-line"></span><small>连续照护，安心相伴</small></aside><div class="stage-corner-switch">${roleMenu()}</div></div>`;
 }
 
 function workspaceOverview() {
@@ -301,7 +303,11 @@ function workspaceOverview() {
       ],
     ];
   }
-  return `<section class="overview-banner"><div class="overview-copy"><span class="overview-kicker">${icon("leaf")}${tag}</span><h2>${title}</h2><p>${description}</p></div><div class="care-flow" aria-label="工作流程入口">${links.map(([ic, label, count, page], index) => `<a class="care-flow-step" href="${href(role, page)}"><span class="flow-icon tone-${index}">${icon(ic)}</span><strong>${label}</strong><small>${count}</small><span class="flow-arrow">${icon("chevron")}</span></a>`).join("")}</div></section>`;
+  const flow = `<div class="care-flow" aria-label="工作流程入口">${links.map(([ic, label, count, page], index) => `<a class="care-flow-step" href="${href(role, page)}"><span class="flow-icon tone-${index}">${icon(ic)}</span><strong>${label}</strong><small>${count}</small><span class="flow-arrow">${icon("chevron")}</span></a>`).join("")}</div>`;
+  if (role === "doctor") {
+    return `<section class="overview-banner doctor-overview">${flow}</section>`;
+  }
+  return `<section class="overview-banner"><div class="overview-copy"><span class="overview-kicker">${icon("leaf")}${tag}</span><h2>${title}</h2><p>${description}</p></div>${flow}</section>`;
 }
 function enhanceSectionHeadings() {
   const names = [
@@ -768,6 +774,60 @@ function familyMe() {
       "",
     )}</div><div style="margin-top:18px">${p.status !== "ended" ? btn("发起照护交接", "handoff", p.id, "full", "users") : badge("本轮已交付资料", "")}</div>${p.handoff?.status === "pending" ? `<div class="notice amber">${icon("clock")}<div>${esc(p.handoff.from)} → ${esc(p.handoff.to)}<br>等待接班确认${actor() === p.handoff.to ? btn("确认接班", "accept-handoff", p.id, "small soft") : ""}</div></div>` : ""}</section><section class="card pad"><h2 class="section-gap">本轮照护资料</h2>${p.previousServiceId ? `<a class="text-btn" href="${href("family", "me", p.previousServiceId)}">${icon("file")}查看上一轮照护资料</a>` : ""}<dl class="info-list"><div><dt>宠物</dt><dd>${esc(p.name)} · ${esc(p.breed)}</dd></div><div><dt>照护场景</dt><dd>${esc(p.scene)}</dd></div><div><dt>本轮开始</dt><dd>${fmt(p.start)}</dd></div><div><dt>服务状态</dt><dd>${pBadge(p)}</dd></div></dl>${p.status === "ended" ? `<div class="notice">${icon("check")}<div>${esc(p.endReason)}</div></div>` : '<div class="divider"></div>'}${btn("下载照护资料包", "export-pet", p.id, "full", "download")}</section></div><aside class="stack"><section class="card pad"><h2 class="section-gap">复查安排</h2>${appointmentCards(p.id)}${p.status !== "ended" ? btn("申请复查", "appointment", p.id, "soft full", "calendar") : ""}</section><section class="card contact-card"><h3>${esc(s.clinic.name)}</h3><p style="font-size:12px">随访负责人：${esc(s.clinic.contact)}<br>服务时间：${esc(s.clinic.hours)}</p><a class="btn full" href="tel:${s.clinic.phone.replace(/[^\d+]/g, "")}">${icon("phone")}拨打医院电话</a></section></aside></div>`;
 }
+let homeMood = -1;
+const homeMoodFaces = ["😸", "😌", "🙂", "🥺", "🤒"];
+const homeMoodSay = [
+  "栗子今天：很有精神，恢复得不错",
+  "栗子今天：平静安稳",
+  "栗子今天：状态一般，多观察",
+  "栗子今天：有点没精神，注意饮食",
+  "栗子今天：不太舒服，建议联系随访负责人",
+];
+const homeRoleCards = () => {
+  const s = state();
+  const cards = [
+    [
+      "clinic",
+      "building",
+      "院方协同",
+      `跟进出院交接与协同待办，让每份安排都有回应。当前待办 ${s.concerns.filter((c) => c.status !== "resolved").length} 项。`,
+    ],
+    [
+      "doctor",
+      "stethoscope",
+      "医生工作台",
+      "复核出院计划、审核调整与用药疑问，专业意见直达家庭。",
+    ],
+    [
+      "family",
+      "paw",
+      "家庭照护",
+      `照护任务、每日打卡与医生叮嘱。${s.pets.filter((p) => p.status !== "ended").length} 位小动物照护中。`,
+    ],
+    [
+      "ops",
+      "chart",
+      "平台运营",
+      "合作机构、照护模板与用量结算，支撑服务持续运转。",
+    ],
+  ];
+  return cards
+    .map(
+      ([key, ic, name, desc]) =>
+        `<a class="role-card" href="${href(key, key === "family" ? "today" : "dashboard")}"><span class="role-ic">${icon(ic)}</span><div><b>${name}</b><small>${desc}</small></div><span class="go">进入工作台${icon("arrow")}</span></a>`,
+    )
+    .join("");
+};
+function homePage() {
+  const heartSvg = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21c-4.5-3.4-8-6.6-8-10.2C4 7.9 6.2 6 8.6 6c1.4 0 2.6.7 3.4 1.9C12.8 6.7 14 6 15.4 6 17.8 6 20 7.9 20 10.8c0 3.6-3.5 6.8-8 10.2Z"/></svg>`;
+  const checkSvg = `<svg viewBox="0 0 24 24" fill="none" stroke="#0891a8" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>`;
+  return `<div class="home-page"><div class="bg" aria-hidden="true"><div class="orb orb-mint"></div><div class="orb orb-blue"></div></div><span class="spark" aria-hidden="true"></span><span class="spark" aria-hidden="true"></span><span class="spark" aria-hidden="true"></span><span class="spark" aria-hidden="true"></span><span class="spark" aria-hidden="true"></span><span class="spark" aria-hidden="true"></span>
+<nav class="home-nav" aria-label="主导航"><a class="brand" href="${href("home", "dashboard")}"><span class="brand-mark"><svg viewBox="0 0 24 24" fill="none" stroke="#0891a8" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21c-4.5-3.4-8-6.6-8-10.2C4 7.9 6.2 6 8.6 6c1.4 0 2.6.7 3.4 1.9C12.8 6.7 14 6 15.4 6 17.8 6 20 7.9 20 10.8c0 3.6-3.5 6.8-8 10.2Z"/></svg></span><span>栖愈<small>QIYU CARE</small></span></a><div class="nav-right"><div class="nav-links"><a href="${href("clinic", "dashboard")}">院方协同</a><a href="${href("doctor", "dashboard")}">医生工作台</a><a href="${href("family", "today")}">家庭照护</a><a href="${href("ops", "dashboard")}">平台运营</a></div><i class="nav-divider" aria-hidden="true"></i><a class="btn-primary" href="${href("clinic", "dashboard")}">${heartSvg}开始使用</a></div></nav>
+<main class="hero" id="main"><section class="copy"><span class="badge"><svg class="leaf" viewBox="0 0 24 24" fill="none" stroke="#4a9a5c" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20c0-9 5-14 16-16-1 11-6 16-13 16"/><path d="M4 20c4-6 8-9 12-11"/></svg>宠物诊后协同照护平台</span><h1>照护在手，<br><span class="soft">安心相伴。</span></h1><div class="trust"><span>${checkSvg}来源清楚</span><span>${checkSvg}责任明确</span><span>${checkSvg}照护连续</span></div><div class="cta-row"><a class="btn-primary btn-hero" href="${href("clinic", "dashboard")}">${heartSvg}开始使用</a><a class="btn-soft" href="${href("family", "today")}">看看家庭端</a></div></section>
+<section class="stage" aria-label="栖愈家庭端预览"><div class="halo" aria-hidden="true"></div><div class="orbit" aria-hidden="true"></div><div class="streak" role="status"><span class="flame">🔥</span><span><b>连续照护 12 天</b><small>家庭自报 · 每日执行</small></span></div><div class="glass-card"><div class="card-top"><span class="avatar">🐈</span><span class="who"><b>栗子的家长</b><small>家庭端 · 照护进行中</small></span><span class="live"><i></i>已连接医院</span></div><div class="mood"><p>今天栗子的状态如何？</p><div class="mood-row" role="group" aria-label="选择宠物状态">${homeMoodFaces.map((f, i) => `<button type="button" data-action="home-mood" data-mood="${i}" class="${homeMood === i ? "on" : ""}" aria-label="${["很有精神", "平静", "一般", "没精神", "不舒服"][i]}">${f}</button>`).join("")}</div><p class="mood-say" id="mood-say" aria-live="polite">${homeMood >= 0 ? esc(homeMoodSay[homeMood]) : ""}</p></div><div class="affirm"><span class="moon"><svg viewBox="0 0 24 24" fill="none" stroke="#a0aec0" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"/></svg></span><p>晚间 21:00 服药后，记得拍一张记录照。<small>来自 安安动物医院 · 随访负责人 林医生</small></p></div><div class="act-row"><a class="act" href="${href("family", "today")}">🍚 记录喂药</a><a class="act" href="${href("family", "messages")}">📸 上传记录</a></div></div><div class="pill-float"><span class="vet">🩺</span><span>兽医已回复 · 用药疑问 3 条</span></div></section></main>
+<section class="home-roles" aria-label="选择工作空间"><div class="roles-head"><h2>四端协同，一个闭环</h2><p>点击卡片进入对应工作台 · 演示数据均为虚构</p></div><div class="roles-grid">${homeRoleCards()}</div></section>
+<footer class="home-foot">栖愈 QIYU CARE · 宠物诊后协同照护平台 · 连续照护，安心相伴</footer></div>`;
+}
 function render() {
   const r = route();
   const previousScroll =
@@ -777,6 +837,11 @@ function render() {
   document.body.classList.toggle("family-mode", r.role === "family");
   if (r.role === "family") sessionStorage.setItem("qiyu.pet", selectedPet().id);
   document.body.dataset.workspace = r.role;
+  if (r.role === "home") {
+    document.title = "栖愈 · 连续照护，安心相伴";
+    app.innerHTML = homePage();
+    return;
+  }
   document.title = `${roles[r.role].name} · 栖愈`;
   let content;
   if (r.role === "family") {
@@ -811,6 +876,17 @@ function render() {
     app.innerHTML = desktopShell(content);
   }
   enhanceSectionHeadings();
+  sprinkleLive();
+}
+/* 给主按钮 / 图标按钮注入随机 --sd，让扫光与图标微动效错峰跳动 */
+function sprinkleLive() {
+  if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
+  document
+    .querySelectorAll(".btn.primary,.btn.soft,.icon-btn,.metric-icon")
+    .forEach((el) => {
+      if (!el.style.getPropertyValue("--sd"))
+        el.style.setProperty("--sd", (Math.random() * 3.4).toFixed(2) + "s");
+    });
 }
 function toast(text, error = false) {
   const el = document.querySelector("#toast");
@@ -1295,7 +1371,7 @@ function exportPet(petId) {
     ),
     events = s.events.filter((e) => e.petId === petId),
     cs = s.concerns.filter((c) => c.petId === petId);
-  const html = `<!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>${esc(p.name)}的照护资料 · 栖愈</title><style>body{font-family:system-ui,sans-serif;color:#233c35;max-width:800px;margin:40px auto;padding:24px;line-height:1.8}h1{font-size:26px}h2{font-size:20px;margin-top:30px}section{border-bottom:1px solid #dfe5da;padding:16px 0}p{white-space:pre-wrap}small{color:#68776f}img{max-width:260px}dt{color:#68776f}dd{margin-left:0}</style><h1>${esc(p.name)}的本轮照护资料</h1><p>${esc(s.clinic.name)} · ${esc(p.scene)}<br>主人：${esc(p.owner)}<br>资料截至：${fmt(new Date().toISOString(), true)}</p><h2>正式照护安排</h2>${plans.map((pl) => `<section><h3>${esc(pl.reason)}</h3><p>确认人：${esc(pl.author)}<br>来源：${esc(pl.source)}<br>生效：${fmt(pl.effectiveAt, true)}</p>${pl.items.map((i) => `<p><b>${esc(i.time)} ${esc(i.title)}</b><br>${esc(i.detail)}</p>`).join("")}<p>${esc(pl.note)}</p>${pl.sourceDocument && /^data:(application\/pdf|image\/(png|jpeg|webp));base64,/.test(pl.sourceDocument.data) ? `<p><a href="${esc(pl.sourceDocument.data)}" download="${esc(pl.sourceDocument.name)}">下载原始材料：${esc(pl.sourceDocument.name)}</a></p>` : ""}</section>`).join("")}<h2>家庭自报执行记录</h2>${events.map((e) => `<section><b>${esc(s.tasks.find((t) => t.id === e.taskId)?.title || "照护事项")} · ${esc(resultLabels[e.result])}</b><p>${esc(e.note)}</p>${e.difficulty ? `<p>报告的困难：${esc(e.difficulty)}</p>` : ""}<small>记录人：${esc(e.actor)} · 实际发生：${fmt(e.occurredAt, true)}${e.corrects ? " · 更正记录" : ""}</small>${e.attachment ? `<p><img src="${safeImage(e.attachment)}" alt="照护记录附件"></p>` : ""}</section>`).join("") || "<p>暂无记录</p>"}<h2>问题与医院答复</h2>${cs.map((c) => `<section><h3>${esc(c.title)} · ${esc(concernLabels[c.status])}</h3>${c.difficulty ? `<p>家庭报告的困难：${esc(c.difficulty)}</p>` : ""}${c.messages.map((m) => `<p><b>${esc(m.actor)}</b> · ${fmt(m.at, true)}<br>${esc(m.text)}</p>`).join("")}<p>下一步：${esc(c.nextAction || "待明确")}</p></section>`).join("") || "<p>暂无问题</p>"}<h2>复查与服务交付</h2>${s.appointments
+  const html = `<!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>${esc(p.name)}的照护资料 · 栖愈</title><style>body{font-family:system-ui,sans-serif;color:#23373c;max-width:800px;margin:40px auto;padding:24px;line-height:1.8}h1{font-size:26px}h2{font-size:20px;margin-top:30px}section{border-bottom:1px solid #dae4e5;padding:16px 0}p{white-space:pre-wrap}small{color:#687477}img{max-width:260px}dt{color:#687477}dd{margin-left:0}</style><h1>${esc(p.name)}的本轮照护资料</h1><p>${esc(s.clinic.name)} · ${esc(p.scene)}<br>主人：${esc(p.owner)}<br>资料截至：${fmt(new Date().toISOString(), true)}</p><h2>正式照护安排</h2>${plans.map((pl) => `<section><h3>${esc(pl.reason)}</h3><p>确认人：${esc(pl.author)}<br>来源：${esc(pl.source)}<br>生效：${fmt(pl.effectiveAt, true)}</p>${pl.items.map((i) => `<p><b>${esc(i.time)} ${esc(i.title)}</b><br>${esc(i.detail)}</p>`).join("")}<p>${esc(pl.note)}</p>${pl.sourceDocument && /^data:(application\/pdf|image\/(png|jpeg|webp));base64,/.test(pl.sourceDocument.data) ? `<p><a href="${esc(pl.sourceDocument.data)}" download="${esc(pl.sourceDocument.name)}">下载原始材料：${esc(pl.sourceDocument.name)}</a></p>` : ""}</section>`).join("")}<h2>家庭自报执行记录</h2>${events.map((e) => `<section><b>${esc(s.tasks.find((t) => t.id === e.taskId)?.title || "照护事项")} · ${esc(resultLabels[e.result])}</b><p>${esc(e.note)}</p>${e.difficulty ? `<p>报告的困难：${esc(e.difficulty)}</p>` : ""}<small>记录人：${esc(e.actor)} · 实际发生：${fmt(e.occurredAt, true)}${e.corrects ? " · 更正记录" : ""}</small>${e.attachment ? `<p><img src="${safeImage(e.attachment)}" alt="照护记录附件"></p>` : ""}</section>`).join("") || "<p>暂无记录</p>"}<h2>问题与医院答复</h2>${cs.map((c) => `<section><h3>${esc(c.title)} · ${esc(concernLabels[c.status])}</h3>${c.difficulty ? `<p>家庭报告的困难：${esc(c.difficulty)}</p>` : ""}${c.messages.map((m) => `<p><b>${esc(m.actor)}</b> · ${fmt(m.at, true)}<br>${esc(m.text)}</p>`).join("")}<p>下一步：${esc(c.nextAction || "待明确")}</p></section>`).join("") || "<p>暂无问题</p>"}<h2>复查与服务交付</h2>${s.appointments
     .filter((a) => a.petId === petId)
     .map(
       (a) =>
@@ -1470,6 +1546,16 @@ async function onAction(el) {
     s = state(),
     r = route();
   switch (action) {
+    case "home-mood": {
+      const i = Number(el.dataset.mood);
+      homeMood = i;
+      document
+        .querySelectorAll(".mood-row button")
+        .forEach((b) => b.classList.toggle("on", Number(b.dataset.mood) === i));
+      const say = document.getElementById("mood-say");
+      if (say) say.textContent = homeMoodSay[i];
+      break;
+    }
     case "new-round":
       openNewRound(id);
       break;
@@ -2165,5 +2251,5 @@ document.addEventListener("keydown", (e) => {
     searchModal();
   }
 });
-if (!location.hash) location.replace(href("clinic", "dashboard"));
+if (!location.hash) location.replace(href("home", "dashboard"));
 render();

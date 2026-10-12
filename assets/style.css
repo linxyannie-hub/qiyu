@@ -1,13 +1,13 @@
 :root {
-  --ink: #233c35;
-  --text: #3f514a;
-  --muted: #68776f;
-  --green: #176455;
-  --green-dark: #114c41;
-  --mint: #e7f0ea;
-  --bg: #f6f7f3;
-  --surface: #fff;
-  --line: #e3e8e0;
+  --ink: #23373c;
+  --text: #3f4e51;
+  --muted: #687477;
+  --green: #0891a8;
+  --green-dark: #067187;
+  --mint: #dff2f3;
+  --bg: #eef2f7;
+  --surface: #ffffff;
+  --line: #e0e7e8;
   --amber: #966323;
   --amber-bg: #faeed9;
   --red: #a74940;
@@ -15,8 +15,8 @@
   --blue: #416b89;
   --blue-bg: #eaf1f6;
   --radius: 18px;
-  --shadow: 0 12px 36px #233c3509;
-  font-family: Inter, "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+  --shadow: 0 12px 36px #23373c09;
+  font-family: "MiSans VF", Inter, "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
   color: var(--ink);
   font-synthesis: none;
   line-height: 1.6;
@@ -62,7 +62,7 @@ button:focus-visible,
 input:focus-visible,
 select:focus-visible,
 textarea:focus-visible {
-  outline: 3px solid #8baf92;
+  outline: 3px solid #3fb8cd;
   outline-offset: 3px;
 }
 button,
@@ -143,7 +143,7 @@ small {
   inset: 0 auto 0 0;
   width: 232px;
   padding: 29px 18px 20px;
-  background: #f9faf6;
+  background: #f2f4fa;
   border-right: 1px solid var(--line);
   display: flex;
   flex-direction: column;
@@ -204,18 +204,23 @@ small {
   gap: 12px;
   min-height: 46px;
   padding: 10px 16px;
-  color: #637169;
+  color: #636f71;
   font-size: 14px;
   border-radius: 10px;
   position: relative;
 }
 .nav a:hover {
-  background: #edf1ea;
+  background: #eaf0f1;
 }
 .nav a.active {
+  background: var(--mint);
+  color: var(--green-dark);
+  font-weight: 600;
+  box-shadow: inset 3px 0 0 var(--green);
+}
+.nav a.active .nav-count {
   background: var(--green);
-  color: white;
-  font-weight: 550;
+  color: #fff;
 }
 .nav-count {
   margin-left: auto;
@@ -229,7 +234,7 @@ small {
   padding-top: 30px;
 }
 .sidebar-note {
-  background: #edf1e8;
+  background: #e8f0f1;
   border-radius: 12px;
   padding: 16px;
   margin: 0 7px 20px;
@@ -253,7 +258,7 @@ small {
   width: 36px;
   height: 36px;
   border-radius: 50%;
-  background: #e3e9de;
+  background: #dee8e9;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -311,7 +316,7 @@ small {
   display: flex;
   align-items: center;
   gap: 8px;
-  background: #edefe9;
+  background: #e9efef;
   padding: 8px 13px;
   border-radius: 9px;
   min-width: 210px;
@@ -325,7 +330,7 @@ small {
 .global-search kbd {
   margin-left: auto;
   font: 10px monospace;
-  border: 1px solid #d8ded4;
+  border: 1px solid #d4ddde;
   border-radius: 4px;
   padding: 0 4px;
 }
@@ -382,7 +387,7 @@ small {
   padding: 8px;
   background: white;
   border: 1px solid var(--line);
-  box-shadow: 0 12px 40px #233c3519;
+  box-shadow: 0 12px 40px #23373c19;
   border-radius: 12px;
   z-index: 60;
 }
@@ -444,7 +449,7 @@ small {
   height: 16px;
 }
 .btn:hover {
-  background: #f1f4ef;
+  background: #eff4f4;
 }
 .btn.primary {
   background: var(--green);
@@ -492,7 +497,7 @@ small {
   position: relative;
   overflow: hidden;
   border-radius: 20px;
-  background: #e9efe4;
+  background: #e4eeef;
   padding: 25px 30px;
   margin-bottom: 23px;
   display: flex;
@@ -502,7 +507,7 @@ small {
   min-height: 161px;
 }
 .hero .eyebrow {
-  color: #718268;
+  color: #688082;
 }
 .hero h2 {
   font-size: 23px;
@@ -512,7 +517,7 @@ small {
 .hero p {
   font-size: 12px;
   max-width: 510px;
-  color: #63755e;
+  color: #5e7375;
 }
 .hero-link {
   margin-top: 17px;
@@ -541,17 +546,17 @@ small {
   width: 100%;
   height: 100%;
   transform: rotate(-6deg);
-  box-shadow: 0 10px 24px #2d4a2920;
+  box-shadow: 0 10px 24px #29464a20;
   border: 5px solid #ffffff80;
   border-radius: 30px;
 }
 .hero-mini {
   position: absolute;
   background: white;
-  border: 1px solid #e3eadc;
+  border: 1px solid #dce9ea;
   border-radius: 12px;
   padding: 11px 13px;
-  box-shadow: 0 7px 25px #233c3510;
+  box-shadow: 0 7px 25px #23373c10;
   z-index: 2;
   left: 8px;
   top: 0;
@@ -578,7 +583,7 @@ small {
 .hero-orbit {
   position: absolute;
   inset: -15px 0 -15px 30px;
-  border: 1px dashed #bcd0b0;
+  border: 1px dashed #b0cdd0;
   border-radius: 50%;
   transform: rotate(-12deg);
 }
@@ -604,7 +609,7 @@ small {
 .stat-top .icon {
   width: 19px;
   height: 19px;
-  color: #85967f;
+  color: #7f9496;
 }
 .stat-number {
   font-size: 29px;
@@ -697,7 +702,7 @@ small {
 .tab span {
   margin-left: 5px;
   font-size: 10px;
-  background: #f0f2ec;
+  background: #ecf2f2;
   padding: 1px 5px;
   border-radius: 4px;
 }
@@ -717,19 +722,19 @@ small {
   letter-spacing: 0.3px;
   color: var(--muted);
   padding: 13px 20px;
-  background: #fafbf8;
+  background: #f8fbfb;
   border-bottom: 1px solid var(--line);
 }
 .data-table td {
   padding: 17px 20px;
-  border-bottom: 1px solid #eef0ea;
+  border-bottom: 1px solid #eaf0f0;
   vertical-align: middle;
 }
 .data-table tr:last-child td {
   border-bottom: 0;
 }
 .data-table tbody tr:hover {
-  background: #fbfcf9;
+  background: #f9fcfc;
 }
 .pet-cell {
   display: flex;
@@ -765,8 +770,8 @@ small {
   font-size: 10px;
   font-weight: 500;
   white-space: nowrap;
-  background: #f0f2ec;
-  color: #667560;
+  background: #ecf2f2;
+  color: #607375;
 }
 .badge.green {
   background: var(--mint);
@@ -826,7 +831,7 @@ small {
   display: flex;
   align-items: center;
   gap: 11px;
-  border-bottom: 1px solid #eef0ea;
+  border-bottom: 1px solid #eaf0f0;
 }
 .schedule-item:last-child {
   border-bottom: 0;
@@ -881,14 +886,14 @@ small {
 .progress {
   height: 5px;
   border-radius: 4px;
-  background: #ecf0e7;
+  background: #e7eff0;
   margin-top: 8px;
   overflow: hidden;
 }
 .progress i {
   display: block;
   height: 100%;
-  background: #8aa578;
+  background: #78a2a5;
   border-radius: 4px;
 }
 .mini-card p {
@@ -942,7 +947,7 @@ small {
 .page-foot {
   display: flex;
   justify-content: space-between;
-  color: #7a857b;
+  color: #7a8485;
   font-size: 10px;
   padding: 25px 2px 0;
   gap: 15px;
@@ -1038,7 +1043,7 @@ small {
   display: flex;
   align-items: center;
   gap: 20px;
-  background: #e9efe4;
+  background: #e4eeef;
   border-radius: 18px;
   padding: 25px;
   margin-bottom: 22px;
@@ -1136,7 +1141,7 @@ small {
 .empty .icon {
   width: 35px;
   height: 35px;
-  color: #8ca18a;
+  color: #8a9ea1;
   margin-bottom: 12px;
 }
 .empty h3 {
@@ -1176,7 +1181,7 @@ small {
 .message-text {
   padding: 12px 15px;
   border-radius: 0 12px 12px;
-  background: #f1f4ed;
+  background: #edf4f4;
   font-size: 12px;
   color: var(--text);
   white-space: pre-wrap;
@@ -1212,9 +1217,9 @@ small {
 .field textarea,
 .field select {
   width: 100%;
-  border: 1px solid #cfd7cc;
+  border: 1px solid #ccd6d7;
   border-radius: 8px;
-  background: #fff;
+  background: #ffffff;
   padding: 10px 12px;
   font-size: 13px;
   color: var(--text);
@@ -1226,7 +1231,7 @@ small {
 }
 .field input::placeholder,
 .field textarea::placeholder {
-  color: #89958a;
+  color: #899395;
 }
 .field small {
   font-size: 10px;
@@ -1259,7 +1264,7 @@ small {
   display: none;
 }
 .plan-item-editor {
-  background: #f7f9f3;
+  background: #f3f9f9;
   border: 1px solid var(--line);
   border-radius: 12px;
   padding: 16px;
@@ -1279,8 +1284,8 @@ small {
 }
 .plan-preview {
   padding: 20px;
-  background: #f9faf6;
-  border: 1px dashed #bccdb8;
+  background: #f6fafa;
+  border: 1px dashed #b8cbcd;
   border-radius: 14px;
 }
 .plan-preview h3 {
@@ -1305,7 +1310,7 @@ dialog {
   border-radius: 20px;
   width: min(610px, calc(100vw - 32px));
   max-height: 90vh;
-  box-shadow: 0 30px 100px #173b3340;
+  box-shadow: 0 30px 100px #17333b40;
   color: var(--ink);
   background: white;
 }
@@ -1313,7 +1318,7 @@ dialog.wide {
   width: min(820px, calc(100vw - 32px));
 }
 dialog::backdrop {
-  background: #173b3366;
+  background: #17333b66;
   backdrop-filter: blur(3px);
 }
 .dialog-head {
@@ -1372,7 +1377,7 @@ dialog::backdrop {
   bottom: 30px;
   left: 50%;
   transform: translateX(-50%) translateY(20px);
-  background: #233c35;
+  background: #23373c;
   color: white;
   padding: 12px 20px;
   border-radius: 12px;
@@ -1384,7 +1389,7 @@ dialog::backdrop {
     opacity 0.2s,
     transform 0.2s;
   max-width: calc(100vw - 32px);
-  box-shadow: 0 8px 30px #233c3526;
+  box-shadow: 0 8px 30px #23373c26;
 }
 #toast.visible {
   opacity: 1;
@@ -1435,7 +1440,7 @@ dialog::backdrop {
   gap: 7px;
 }
 .chart-col i {
-  background: #aac29d;
+  background: #9dbfc2;
   display: block;
   border-radius: 5px 5px 0 0;
   min-height: 3px;
@@ -1483,7 +1488,7 @@ dialog::backdrop {
 }
 .family-shell {
   min-height: 100vh;
-  background: #f4f6f0;
+  background: linear-gradient(180deg, #f3f6fb 0%, #eef2f7 45%, #e9eff6 100%);
 }
 .family-top {
   height: 76px;
@@ -1565,7 +1570,7 @@ dialog::backdrop {
 .family-greeting {
   padding: 27px;
   border-radius: 20px;
-  background: #e6edde;
+  background: #deeced;
   position: relative;
   overflow: hidden;
   margin-bottom: 20px;
@@ -1587,7 +1592,7 @@ dialog::backdrop {
   width: 94px;
   height: 94px;
   transform: rotate(5deg);
-  border: 4px solid #fff8;
+  border: 4px solid #ffffff88;
   border-radius: 26px;
 }
 .task-card {
@@ -1621,7 +1626,7 @@ dialog::backdrop {
   flex-shrink: 0;
 }
 .task-card.done {
-  background: #fafcf8;
+  background: #f8fcfc;
 }
 .task-status {
   font-size: 10px;
@@ -1643,7 +1648,7 @@ dialog::backdrop {
 }
 .contact-card p,
 .contact-card small {
-  color: #d1e4d9;
+  color: #d1e1e4;
 }
 .contact-card h3 {
   font-size: 16px;
@@ -1764,7 +1769,7 @@ dialog::backdrop {
   font-size: 12px;
   line-height: 1.8;
   color: var(--text);
-  background: #f5f7f0;
+  background: #f0f7f7;
   padding: 18px;
   border-radius: 12px;
 }
@@ -1918,7 +1923,7 @@ dialog::backdrop {
     transform: translateX(-100%);
     transition: transform 0.2s;
     width: 232px;
-    box-shadow: 0 20px 80px #233c3520;
+    box-shadow: 0 20px 80px #23373c20;
   }
   .sidebar.open {
     transform: translateX(0);
@@ -1926,7 +1931,7 @@ dialog::backdrop {
   .mobile-scrim {
     position: fixed;
     inset: 0;
-    background: #233c3560;
+    background: #23373c60;
     z-index: 29;
   }
   .main-shell {
@@ -2109,7 +2114,7 @@ dialog::backdrop {
     left: 0;
     right: 0;
     padding: 7px 10px calc(7px + env(safe-area-inset-bottom));
-    background: #fffffff5;
+    background: #ffffff;
     border-top: 1px solid var(--line);
     backdrop-filter: blur(10px);
     z-index: 25;
@@ -2138,7 +2143,7 @@ dialog::backdrop {
   }
   .family-top .role-select summary {
     border: 0;
-    background: #f3f5ef;
+    background: #eff5f5;
   }
   .dialog-body {
     padding: 20px;
@@ -2339,7 +2344,7 @@ dialog .text-btn {
 }
 /* The family workspace is a small-program viewport inside a phone. */
 .family-mode {
-  background: #edf1e9;
+  background: #e9f0f1;
 }
 .phone-stage {
   min-height: 100dvh;
@@ -2350,9 +2355,9 @@ dialog .text-btn {
   padding: 32px max(32px, calc((100vw - 1280px) / 2));
   background: radial-gradient(
     ellipse at 50% 35%,
-    #f8faf5 0%,
-    #ecf1e7 55%,
-    #e5ecdc 100%
+    #f5fafa 0%,
+    #e7f0f1 55%,
+    #dcebec 100%
   );
   position: relative;
 }
@@ -2400,14 +2405,14 @@ dialog .text-btn {
   width: 420px;
   height: min(900px, calc(100dvh - 64px));
   min-height: 400px;
-  border: 1px solid #566552;
-  background: #344638;
+  border: 1px solid #526365;
+  background: #344346;
   border-radius: 48px;
   padding: 10px;
   box-shadow:
-    0 35px 80px #2c48232a,
-    0 6px 16px #24341e28,
-    inset 0 0 0 3px #60715b;
+    0 35px 80px #2344482a,
+    0 6px 16px #1e323428,
+    inset 0 0 0 3px #5b6f71;
   position: relative;
 }
 .phone-frame:before {
@@ -2418,10 +2423,10 @@ dialog .text-btn {
   width: 3px;
   height: 32px;
   border-radius: 2px;
-  background: #596b50;
+  background: #50696b;
   box-shadow:
-    0 52px #596b50,
-    0 98px #596b50;
+    0 52px #50696b,
+    0 98px #50696b;
 }
 .phone-frame:after {
   content: "";
@@ -2430,13 +2435,13 @@ dialog .text-btn {
   top: 176px;
   width: 3px;
   height: 68px;
-  background: #596b50;
+  background: #50696b;
   border-radius: 2px;
 }
 .phone-screen {
   height: 100%;
   overflow: hidden;
-  background: #f5f7f0;
+  background: #f0f7f7;
   border-radius: 38px;
   display: flex;
   flex-direction: column;
@@ -2453,14 +2458,14 @@ dialog .text-btn {
   font-weight: 650;
   position: relative;
   background: white;
-  color: #233c35;
+  color: #23373c;
 }
 .phone-island {
   position: absolute;
   width: 106px;
   height: 25px;
   border-radius: 20px;
-  background: #263329;
+  background: #263133;
   top: 5px;
   left: 50%;
   transform: translateX(-50%);
@@ -2474,7 +2479,7 @@ dialog .text-btn {
   flex: 1;
   min-height: 0;
   flex-direction: column;
-  background: #f4f6f0;
+  background: linear-gradient(180deg, #f3f6fb 0%, #eef2f7 45%, #e9eff6 100%);
 }
 .phone-screen .family-top {
   height: 53px;
@@ -2498,7 +2503,7 @@ dialog .text-btn {
 }
 .mini-capsule {
   display: flex;
-  border: 1px solid #dae1d6;
+  border: 1px solid #d6e0e1;
   border-radius: 20px;
   height: 31px;
   background: white;
@@ -2516,7 +2521,7 @@ dialog .text-btn {
 .mini-capsule i {
   height: 15px;
   width: 1px;
-  background: #d9dfd4;
+  background: #d4dedf;
 }
 .capsule-dots {
   font-size: 20px;
@@ -2550,7 +2555,7 @@ dialog .text-btn {
   overscroll-behavior: contain;
   padding: 19px 17px 24px;
   scrollbar-width: thin;
-  scrollbar-color: #ccd8c4 transparent;
+  scrollbar-color: #c4d6d8 transparent;
 }
 .phone-screen .family-petbar {
   gap: 10px;
@@ -2747,7 +2752,7 @@ dialog .text-btn {
   width: 108px;
   height: 4px;
   border-radius: 3px;
-  background: #344638;
+  background: #344346;
   position: absolute;
   top: 4px;
   left: 50%;
@@ -2778,7 +2783,7 @@ dialog .text-btn {
   height: 50px;
   border-radius: 50%;
   background: #ffffff70;
-  color: #78946b;
+  color: #6b9094;
   margin-bottom: 24px;
 }
 .phone-note-icon .icon {
@@ -2789,18 +2794,18 @@ dialog .text-btn {
   font-size: 16px;
   font-weight: 500;
   margin-bottom: 14px;
-  color: #53654a;
+  color: #4a6365;
 }
 .phone-side-note p {
   font-size: 13px;
   line-height: 2.5;
-  color: #6e7c64;
+  color: #647a7c;
 }
 .phone-note-line {
   display: block;
   width: 38px;
   height: 1px;
-  background: #bacbb0;
+  background: #b0c9cb;
   margin: 24px 0;
 }
 .phone-side-note small {
@@ -2934,7 +2939,7 @@ dialog .text-btn {
     padding: 0;
     min-height: 100dvh;
     display: block;
-    background: #f4f6f0;
+    background: linear-gradient(180deg, #f3f6fb 0%, #eef2f7 45%, #e9eff6 100%);
   }
   .phone-frame {
     width: 100%;
@@ -2944,7 +2949,7 @@ dialog .text-btn {
     border: 0;
     border-radius: 0;
     box-shadow: none;
-    background: #f4f6f0;
+    background: linear-gradient(180deg, #f3f6fb 0%, #eef2f7 45%, #e9eff6 100%);
   }
   .phone-frame:before,
   .phone-frame:after,
