@@ -1133,3 +1133,22 @@
     transition-duration: 0.01ms !important;
   }
 }
+
+
+/* Compact homepage navigation */
+.home-page .home-nav {
+  top: 8px;
+  padding: 6px 22px;
+}
+.home-page .home-nav .brand {
+  font-size: 16px;
+  line-height: 1.35;
+}
+.home-page .home-nav .brand-mark {
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+}
+.home-page .home-nav .btn-primary {
+  padding: 8px 22px;
+}
